@@ -2,6 +2,22 @@
 
 A runnable FastAPI app with an in-memory, item-based collaborative filtering engine and a responsive HTML/CSS/JavaScript frontend. No database, frontend build, account, or API key is needed.
 
+## GitHub Pages hosting
+
+The hosted edition runs entirely on GitHub Pages. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, and recommendations then run in the browser. The original FastAPI app remains available locally using the steps below.
+
+To enable publication, open this repository's **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**. The `Deploy GitHub Pages` workflow builds and publishes on pushes to `main`; it can also be run manually from Actions. The expected URL is `https://pjswalksonthemoon.github.io/movie-recommender/` after deployment succeeds.
+
+Generate and preview the static version locally:
+
+```sh
+python -m app.build_static
+node --test tests/static-api.test.cjs
+python -m http.server 8080 --directory dist
+```
+
+Open http://localhost:8080. The export has relative URLs and also works beneath a repository subpath. No server or API key is needed for the hosted edition. Only movie metadata, aggregate rating counts, and derived similarity scores are exported; individual users' ratings are not published. Recommendations refresh when the workflow rebuilds. The browser uses edit-distance typo matching, while the Python API uses difflib. The `/api/*` HTTP routes are only available when running FastAPI, not on GitHub Pages.
+
 ## Setup and run
 
 Install Python 3.11 or newer (tested on Python 3.13). Open a terminal in this `movie-recommender` directory.
@@ -39,7 +55,7 @@ To download ahead of time:
 python -m app.download_data
 ```
 
-## Deploy on Render
+## Optional alternative: deploy on Render
 
 The included `render.yaml` defines a free Python web service in Frankfurt. Connect this GitHub repository to Render as a Blueprint to use these settings. `.python-version` selects Python 3.13. The build installs dependencies and downloads MovieLens; the service starts one Uvicorn worker on Render's assigned port. The health check calls `/api/movies/popular`, which succeeds after model initialization. The frontend and API share one URL.
 

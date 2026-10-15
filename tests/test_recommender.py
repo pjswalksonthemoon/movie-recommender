@@ -61,6 +61,20 @@ def test_model_reused(engine):
     assert engine.model is model
 
 
+def test_static_export_matches_engine(engine, tmp_path):
+    import json
+    from app.build_static import export_site
+    destination = tmp_path / "site"
+    export_site(engine, destination)
+    catalog = json.loads((destination / "movies.json").read_text(encoding="utf-8"))
+    neighbors = json.loads((destination / "recommendations.json").read_text())
+    by_id = {movie["movieId"]: movie for movie in catalog}
+    actual = [{"title": by_id[movie_id]["title"], "genres": by_id[movie_id]["genres"], "score": score}
+              for movie_id, score in neighbors["1"]]
+    assert actual == engine.get_recommendations("Alpha (2000)", 50)
+    assert "4" not in neighbors
+
+
 def test_api(engine, monkeypatch):
     from fastapi.testclient import TestClient
     from app import main

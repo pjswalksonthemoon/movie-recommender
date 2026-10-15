@@ -13,6 +13,7 @@ function element(tag, className, text) {
   return node;
 }
 async function request(url, signal) {
+  if (window.reelwiseRequest) return window.reelwiseRequest(url, signal);
   const response = await fetch(url, { signal });
   const data = await response.json();
   if (!response.ok) {
