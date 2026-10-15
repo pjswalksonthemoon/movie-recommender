@@ -28,6 +28,13 @@ class MovieRecommender:
             raise ValueError("Rating thresholds must be positive.")
         self.movies = pd.read_csv(Path(data_dir) / "movies.csv").fillna({"genres": "(no genres listed)"})
         ratings = pd.read_csv(Path(data_dir) / "ratings.csv")
+        links_path = Path(data_dir) / "links.csv"
+        self.links = pd.read_csv(links_path) if links_path.is_file() else pd.DataFrame(columns=["movieId", "tmdbId"])
+        self.tmdb_ids = {
+            int(row.movieId): int(row.tmdbId)
+            for row in self.links.itertuples(index=False)
+            if pd.notna(row.tmdbId)
+        }
         self.counts = ratings.groupby("movieId").size()
         self.titles = self.movies["title"].tolist()
         self.normalized = self.movies["title"].str.casefold()
@@ -48,21 +55,23 @@ class MovieRecommender:
         self.model = NearestNeighbors(metric="cosine", algorithm="brute").fit(self.matrix)
         self.catalog = self.movies.set_index("movieId")
 
-    def search(self, query: str, limit: int = 8) -> list[str]:
-        """Return literal case-insensitive substring matches, most rated first."""
+    def search(self, query: str, limit: int = 8) -> list[dict]:
+        """Return literal title matches with their MovieLens ids, most rated first."""
         candidates = self.movies[self.normalized.str.contains(query.strip().casefold(), regex=False)].copy()
         candidates["count"] = candidates.movieId.map(self.counts).fillna(0)
-        return candidates.sort_values(["count", "title"], ascending=[False, True]).title.head(limit).tolist()
+        candidates = candidates.sort_values(["count", "title"], ascending=[False, True]).head(limit)
+        return [{"movie_id": int(row.movieId), "title": row.title} for row in candidates.itertuples()]
 
     def _resolve(self, title: str) -> int:
         exact = self.movies[self.normalized == title.casefold()]
         if len(exact) == 1:
             return int(exact.iloc[0].movieId)
         matches = self.search(title)
+        match_titles = [match["title"] for match in matches]
         if len(exact) > 1 or len(matches) > 1:
-            raise RecommendationError("Choose a specific movie title.", "ambiguous_title", matches)
+            raise RecommendationError("Choose a specific movie title.", "ambiguous_title", match_titles)
         if len(matches) == 1:
-            return int(self.movies[self.movies.title == matches[0]].iloc[0].movieId)
+            return int(matches[0]["movie_id"])
         normalized = dict(zip(self.normalized, self.titles))
         fuzzy = get_close_matches(title.casefold(), list(normalized), n=8, cutoff=0.4)
         raise RecommendationError("We couldn't find that movie. Try one of these titles.", "unknown_title", [normalized[t] for t in fuzzy])
@@ -87,14 +96,16 @@ class MovieRecommender:
             if neighbor == index:
                 continue
             row = self.catalog.loc[self.movie_ids[neighbor]]
-            results.append({"title": row.title, "genres": row.genres, "score": round(float(np.clip(1 - distance, 0, 1)), 6)})
+            results.append({"movie_id": int(self.movie_ids[neighbor]), "title": row.title, "genres": row.genres, "score": round(float(np.clip(1 - distance, 0, 1)), 6)})
         return results[:n]
 
     def popular(self) -> list[dict]:
         """Return the twelve most-rated catalog movies and their rating counts."""
         result = self.movies.copy()
         result["rating_count"] = result.movieId.map(self.counts).fillna(0).astype(int)
-        return result.sort_values(["rating_count", "title"], ascending=[False, True]).head(12)[["title", "genres", "rating_count"]].to_dict("records")
+        result = result.sort_values(["rating_count", "title"], ascending=[False, True]).head(12)
+        return [{"movie_id": int(row.movieId), "title": row.title, "genres": row.genres,
+                 "rating_count": int(row.rating_count)} for row in result.itertuples()]
 
 
 @lru_cache(maxsize=1)
@@ -106,3 +117,4 @@ def get_engine() -> MovieRecommender:
 def get_recommendations(movie_title: str, n: int = 10) -> list[dict]:
     """Convenience entry point using the cached default engine."""
     return get_engine().get_recommendations(movie_title, n)
+

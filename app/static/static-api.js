@@ -35,11 +35,31 @@
     const route = new URL(url, document.baseURI);
     const movies = await catalog();
     signal?.throwIfAborted();
-    if (route.pathname === '/api/movies/popular') return movies.slice(0, 12);
+    if (route.pathname === '/api/movies/popular') return movies.slice(0, 12).map(movie => ({...movie, movie_id: movie.movieId}));
+    const detailMatch = route.pathname.match(/^\/api\/movie\/(\d+)(?:\/(similar))?$/);
+    if (detailMatch) {
+      const movieId = Number(detailMatch[1]);
+      const selected = movies.find(movie => movie.movieId === movieId);
+      if (!selected) throw lookupError('Movie not found.');
+      if (detailMatch[2] === 'similar') {
+        const ranked = (await recommendations())[String(movieId)] || [];
+        const byId = new Map(movies.map(movie => [movie.movieId, movie]));
+        return ranked.slice(0, Number(route.searchParams.get('n') || 12)).map(([id, score]) => {
+          const movie = byId.get(id);
+          return {id, movie_id: id, title: movie.title, year: movie.title.match(/\((\d{4})\)\s*$/)?.[1] || null,
+            genres: movie.genres.split('|').filter(Boolean), poster: null, score};
+        });
+      }
+      const year = selected.title.match(/\((\d{4})\)\s*$/)?.[1] || null;
+      return {movie_id: movieId, title: selected.title, year, tagline: '', overview: '', release_date: null,
+        runtime: null, original_language: null, genres: selected.genres.split('|').filter(Boolean), vote_average: null,
+        vote_count: 0, poster: null, backdrop: null, directors: [], writers: [], certification: null, cast: [],
+        trailer_key: null, limited: true};
+    }
     const query = normalize(route.searchParams.get(route.pathname === '/api/search' ? 'q' : 'title') || '');
     if (!query || query.length > 300) throw lookupError('Enter a movie title between 1 and 300 characters.');
     const matches = movies.filter(movie => normalize(movie.title).includes(query));
-    if (route.pathname === '/api/search') return matches.slice(0, 8).map(movie => movie.title);
+    if (route.pathname === '/api/search') return matches.slice(0, 8).map(movie => ({movie_id: movie.movieId, title: movie.title}));
     if (route.pathname !== '/api/recommend') throw lookupError('Unknown request.');
     const n = Number(route.searchParams.get('n') ?? 10);
     if (!Number.isInteger(n) || n < 1 || n > 50) throw lookupError('Choose between 1 and 50 recommendations.');
@@ -57,6 +77,7 @@
     signal?.throwIfAborted();
     if (!neighbors) throw lookupError('This movie has too few eligible ratings. Try a more popular movie.');
     const byId = new Map(movies.map(movie => [movie.movieId, movie]));
-    return neighbors.slice(0, n).map(([id, score]) => ({title: byId.get(id).title, genres: byId.get(id).genres, score}));
+    return neighbors.slice(0, n).map(([id, score]) => ({movie_id: id, title: byId.get(id).title, genres: byId.get(id).genres.split('|').filter(Boolean), score}));
   };
 })();
+

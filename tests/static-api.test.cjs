@@ -14,12 +14,14 @@ test('popular and autocomplete work under a repository subpath', async () => {
   assert.equal((await request('/api/movies/popular')).length, 12);
   const movies = await request('/api/search?q=toy');
   assert.equal(movies.length, 8);
-  assert.equal(movies[0], 'Toy Story (1995)');
+  assert.equal(movies[0].title, 'Toy Story (1995)');
+  assert.equal(movies[0].movie_id, 1);
 });
 test('recommendations have expected neighbor, scores, limits, and no self match', async () => {
   const movies = await request('/api/recommend?title=Toy%20Story%20(1995)&n=10');
   assert.equal(movies.length, 10);
   assert.equal(movies[0].title, 'Toy Story 2 (1999)');
+  assert.equal(movies[0].movie_id, 3114);
   assert(movies.every(movie => movie.title !== 'Toy Story (1995)' && movie.score >= 0 && movie.score <= 1));
   assert.equal((await request('/api/recommend?title=Toy%20Story%20(1995)&n=50')).length, 50);
 });
@@ -41,3 +43,12 @@ test('exported HTML uses relative assets and loads adapter before frontend', () 
   assert(!html.includes('href="/"'));
   assert(html.indexOf('./static-api.js') < html.indexOf('./script.js'));
 });
+test('movie detail route and similar movies work without a server', async () => {
+  const movie = await request('/api/movie/1');
+  assert.equal(movie.title, 'Toy Story (1995)');
+  assert.equal(movie.limited, true);
+  const similar = await request('/api/movie/1/similar?n=3');
+  assert.equal(similar.length, 3);
+  assert(similar.every(item => Number.isInteger(item.movie_id) && Array.isArray(item.genres)));
+});
+

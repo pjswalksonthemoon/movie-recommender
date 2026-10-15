@@ -1,7 +1,14 @@
 .venv/
+.tmp/
+.testdeps/
+.pip-cache/
+work/
 __pycache__/
 .pytest_cache/
 data/*.csv
 data/*.zip
 .env
+.env.*
+!.env.example
 dist/
+

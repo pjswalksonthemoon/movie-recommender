@@ -1,26 +1,37 @@
-"""FastAPI routes and static frontend; start with uvicorn app.main:app --reload."""
+"""FastAPI routes and static frontend; run with ``uvicorn app.main:app --reload``."""
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+import os
+import re
+from typing import Annotated, Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .recommender import RecommendationError, get_engine
+from .tmdb import TMDBClient, TMDBError
 
+load_dotenv()
 STATIC = Path(__file__).parent / "static"
+Title = Annotated[str, Query(min_length=1, max_length=300, pattern=r"\S")]
+Count = Annotated[int, Query(ge=1, le=50)]
+TMDB_IMAGE = "https://image.tmdb.org/t/p/"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = get_engine()
-    yield
+    app.state.tmdb = TMDBClient(os.getenv("TMDB_API_KEY"))
+    try:
+        yield
+    finally:
+        app.state.tmdb.close()
 
 
 app = FastAPI(title="Reelwise", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
-Title = Annotated[str, Query(min_length=1, max_length=300, pattern=r"\S")]
 
 
 @app.get("/api/search")
@@ -29,7 +40,7 @@ def search(q: Title):
 
 
 @app.get("/api/recommend")
-def recommend(title: Title, n: Annotated[int, Query(ge=1, le=50)] = 10):
+def recommend(title: Title, n: Count = 10):
     try:
         return app.state.engine.get_recommendations(title, n)
     except RecommendationError as exc:
@@ -42,6 +53,154 @@ def popular():
     return app.state.engine.popular()
 
 
+def _year(title: str, release_date: str | None = None) -> str | None:
+    date_year = (release_date or "")[:4]
+    if date_year.isdigit():
+        return date_year
+    match = re.search(r"\((\d{4})\)\s*$", title)
+    return match.group(1) if match else None
+
+
+def _basic_movie(movie_id: int) -> dict[str, Any]:
+    engine = app.state.engine
+    rows = engine.movies[engine.movies.movieId == movie_id]
+    if rows.empty:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+    row = rows.iloc[0]
+    title = str(row.title)
+    return {
+        "movie_id": movie_id, "title": title, "year": _year(title), "tagline": "",
+        "overview": "", "release_date": None, "runtime": None, "original_language": None,
+        "genres": [genre for genre in str(row.genres).split("|") if genre and genre != "(no genres listed)"],
+        "vote_average": None, "vote_count": 0, "poster": None, "backdrop": None,
+        "directors": [], "writers": [], "certification": None, "cast": [],
+        "trailer_key": None, "limited": True,
+    }
+
+
+def _certification(payload: dict[str, Any]) -> str | None:
+    release_data = payload.get("release_dates") or {}
+    if not isinstance(release_data, dict):
+        return None
+    countries = release_data.get("results") or []
+    countries = [country for country in countries if isinstance(country, dict)]
+    ordered = sorted(countries, key=lambda item: item.get("iso_3166_1") != "US")
+    for country in ordered:
+        for release in (country.get("release_dates") or []):
+            if not isinstance(release, dict):
+                continue
+            certification = release.get("certification")
+            if certification:
+                return certification
+    return None
+
+
+def _tmdb_movie(payload: dict[str, Any], basic: dict[str, Any]) -> dict[str, Any]:
+    credits = payload.get("credits") or {}
+    if not isinstance(credits, dict):
+        credits = {}
+    crew = credits.get("crew") or []
+    cast = credits.get("cast") or []
+    if not isinstance(crew, list):
+        crew = []
+    if not isinstance(cast, list):
+        cast = []
+    video_data = payload.get("videos") or {}
+    videos = (video_data.get("results") or []) if isinstance(video_data, dict) else []
+    trailer = next((item for item in videos if isinstance(item, dict) and item.get("site") == "YouTube" and item.get("type") == "Trailer"), None)
+    release_date = payload.get("release_date") or None
+    return {
+        **basic,
+        "title": payload.get("title") or basic["title"], "tagline": payload.get("tagline") or "",
+        "overview": payload.get("overview") or "", "release_date": release_date,
+        "year": _year(basic["title"], release_date), "runtime": payload.get("runtime"),
+        "original_language": payload.get("original_language"),
+        "genres": [genre["name"] for genre in (payload.get("genres") or []) if isinstance(genre, dict) and genre.get("name")] or basic["genres"],
+        "vote_average": payload.get("vote_average"), "vote_count": payload.get("vote_count") or 0,
+        "poster": f"{TMDB_IMAGE}w500{payload['poster_path']}" if payload.get("poster_path") else None,
+        "backdrop": f"{TMDB_IMAGE}w1280{payload['backdrop_path']}" if payload.get("backdrop_path") else None,
+        "directors": [person.get("name") for person in crew if isinstance(person, dict) and person.get("job") == "Director" and person.get("name")],
+        "writers": [person.get("name") for person in crew if isinstance(person, dict) and person.get("job") in {"Writer", "Screenplay", "Story"} and person.get("name")],
+        "certification": _certification(payload),
+        "cast": [{"name": person.get("name", "Unknown"), "character": person.get("character") or "",
+                  "profile": f"{TMDB_IMAGE}w185{person['profile_path']}" if person.get("profile_path") else None}
+                 for person in cast[:12] if isinstance(person, dict)],
+        "trailer_key": trailer.get("key") if trailer else None, "limited": False,
+    }
+
+
+@app.get("/api/movie/{movie_id}")
+def movie_details(movie_id: int):
+    if movie_id < 1:
+        raise HTTPException(status_code=422, detail="movie_id must be positive.")
+    basic = _basic_movie(movie_id)
+    tmdb_id = app.state.engine.tmdb_ids.get(movie_id)
+    if not app.state.tmdb.enabled or not tmdb_id:
+        return basic
+    try:
+        return _tmdb_movie(app.state.tmdb.get(f"/movie/{tmdb_id}", append_details=True), basic)
+    except TMDBError:
+        return {**basic, "notice": "Movie details are temporarily unavailable from TMDB."}
+
+
+def _movie_result(movie_id: int, title: str, genres: str | list[str], score: float | None,
+                  poster: str | None = None, release_date: str | None = None) -> dict[str, Any]:
+    genre_list = genres if isinstance(genres, list) else [part for part in genres.split("|") if part and part != "(no genres listed)"]
+    return {"id": movie_id, "movie_id": movie_id, "title": title, "year": _year(title, release_date),
+            "genres": genre_list, "poster": poster, "score": score}
+
+
+@app.get("/api/movie/{movie_id}/similar")
+def similar_movies(movie_id: int, n: Count = 12):
+    basic = _basic_movie(movie_id)
+    engine = app.state.engine
+    results: list[dict[str, Any]] = []
+    try:
+        neighbors = engine.get_recommendations(basic["title"], n)
+        for neighbor in neighbors:
+            other_id = neighbor["movie_id"]
+            poster = None
+            other_tmdb_id = engine.tmdb_ids.get(other_id)
+            if app.state.tmdb.enabled and other_tmdb_id:
+                try:
+                    data = app.state.tmdb.get(f"/movie/{other_tmdb_id}")
+                    if data.get("poster_path"):
+                        poster = f"{TMDB_IMAGE}w500{data['poster_path']}"
+                except TMDBError:
+                    pass
+            results.append(_movie_result(other_id, neighbor["title"], neighbor["genres"], neighbor["score"], poster))
+        if results:
+            return results
+    except RecommendationError:
+        pass
+
+    tmdb_id = engine.tmdb_ids.get(movie_id)
+    if not app.state.tmdb.enabled or not tmdb_id:
+        return results
+    try:
+        payload = app.state.tmdb.get(f"/movie/{tmdb_id}/similar")
+    except TMDBError:
+        return results
+    id_by_tmdb = {tmdb: movie for movie, tmdb in engine.tmdb_ids.items()}
+    similar_results = payload.get("results") or []
+    if not isinstance(similar_results, list):
+        return results
+    for item in similar_results:
+        if not isinstance(item, dict):
+            continue
+        mapped_id = id_by_tmdb.get(item.get("id"))
+        if not mapped_id or mapped_id == movie_id:
+            continue
+        genres = [genre["name"] for genre in item.get("genres", []) if isinstance(genre, dict) and genre.get("name")]
+        results.append(_movie_result(mapped_id, item.get("title") or "Untitled movie", genres or basic["genres"], None,
+                                     f"{TMDB_IMAGE}w500{item['poster_path']}" if item.get("poster_path") else None,
+                                     item.get("release_date")))
+        if len(results) == n:
+            break
+    return results
+
+
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(STATIC / "index.html")
+

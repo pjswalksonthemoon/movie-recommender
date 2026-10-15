@@ -52,7 +52,9 @@ def test_invalid_inputs(engine, title, n):
 def test_search_is_literal_and_popular_is_counted(engine):
     assert engine.search("[") == []
     assert len(engine.search("alpha")) == 2
+    assert engine.search("alpha")[0]["movie_id"] == 1
     assert engine.popular()[0]["rating_count"] == 3
+    assert "movie_id" in engine.popular()[0]
 
 
 def test_model_reused(engine):
@@ -69,7 +71,7 @@ def test_static_export_matches_engine(engine, tmp_path):
     catalog = json.loads((destination / "movies.json").read_text(encoding="utf-8"))
     neighbors = json.loads((destination / "recommendations.json").read_text())
     by_id = {movie["movieId"]: movie for movie in catalog}
-    actual = [{"title": by_id[movie_id]["title"], "genres": by_id[movie_id]["genres"], "score": score}
+    actual = [{"movie_id": movie_id, "title": by_id[movie_id]["title"], "genres": by_id[movie_id]["genres"], "score": score}
               for movie_id, score in neighbors["1"]]
     assert actual == engine.get_recommendations("Alpha (2000)", 50)
     assert "4" not in neighbors
@@ -92,3 +94,4 @@ def test_api(engine, monkeypatch):
         assert client.get("/api/search", params={"q": " "}).status_code == 422
         assert client.get("/api/recommend", params={"title": "Alhpa (2000)"}).status_code == 404
         assert client.get("/api/recommend", params={"title": "Rare (2003)"}).json()["detail"]["code"] == "insufficient_ratings"
+

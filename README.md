@@ -1,10 +1,10 @@
 # Reelwise · movie recommendations
 
-A runnable FastAPI app with an in-memory, item-based collaborative filtering engine and a responsive HTML/CSS/JavaScript frontend. No database, frontend build, account, or API key is needed.
+A runnable FastAPI app with an in-memory, item-based collaborative filtering engine, TMDB movie details, and a responsive HTML/CSS/JavaScript frontend. No database or frontend build is needed. The app works without a TMDB key using the basic MovieLens catalog.
 
 ## GitHub Pages hosting
 
-The hosted edition runs entirely on GitHub Pages. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, and recommendations then run in the browser. The original FastAPI app remains available locally using the steps below.
+The GitHub Pages edition runs entirely in the browser. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, recommendations, and linkable MovieLens-only detail pages then run in the browser. Pages cannot securely access a private TMDB API key or the FastAPI routes, so full cast, posters, trailers, TMDB ratings, and TMDB-based fallback recommendations are available when the FastAPI app runs with a key.
 
 To enable publication, open this repository's **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**. The `Deploy GitHub Pages` workflow builds and publishes on pushes to `main`; it can also be run manually from Actions. The expected URL is `https://pjswalksonthemoon.github.io/movie-recommender/` after deployment succeeds.
 
@@ -47,7 +47,15 @@ uvicorn app.main:app --reload
 
 Open http://127.0.0.1:8000. API documentation is at http://127.0.0.1:8000/docs. Stop with Ctrl+C. If activation is restricted on Windows, run `.venv\Scripts\python.exe -m pip install -r requirements.txt` and `.venv\Scripts\python.exe -m uvicorn app.main:app --reload` instead.
 
-On first startup, the app downloads the official MovieLens `ml-latest-small` archive and puts `movies.csv` and `ratings.csv` directly in `data/`. Startup waits for the download and model fitting; subsequent startups reuse the local files. Internet is required for dependency installation and the first data download. A failed download reports how to install the CSVs manually. Existing CSVs are never downloaded again automatically.
+On first startup, the app downloads the official MovieLens `ml-latest-small` archive and puts `movies.csv`, `ratings.csv`, and `links.csv` directly in `data/`. Startup waits for the download and model fitting; subsequent startups reuse the local files. Internet is required for dependency installation, the first data download, and TMDB requests. A failed download reports how to install the CSVs manually.
+
+To enable full details, copy `.env.example` to `.env` and add your TMDB API key:
+
+```text
+TMDB_API_KEY=your_tmdb_api_key
+```
+
+Restart the server after editing `.env`. The key is read only by Python and is never included in a response or sent to the browser. Without it, detail pages show the MovieLens title, year, and genres with a limited information notice. TMDB results are cached in process memory for one hour. The key can also be set as an environment variable on a Python hosting service. Never add a real `.env` file to Git.
 
 To download ahead of time:
 
@@ -68,13 +76,13 @@ python -m pip install -r requirements.txt && python -m app.download_data
 python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
 ```
 
-Choose the Free plan, leave the root directory empty, and use `main`. Free services sleep when idle and may take time to wake up. The model is rebuilt when the process starts. No database, persistent disk, or API secrets are needed. A deployment configuration in GitHub alone does not create a running service; complete service creation in a connected Render account.
+Choose the Free plan, leave the root directory empty, and use `main`. Free services sleep when idle and may take time to wake up. The model is rebuilt when the process starts. No database or persistent disk is needed. Add `TMDB_API_KEY` in the Render service's environment variables to enable full movie details; it remains optional. A deployment configuration in GitHub alone does not create a running service; complete service creation in a connected Render account.
 
 ## Use the website
 
-Search for a movie, use arrow keys and Enter to select an autocomplete result, or click a popular movie. Each recommendation can become the starting point for another search. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings show an explanation. Back to popular returns to the home collection.
+Search for a movie, use arrow keys and Enter to select an autocomplete result, or click any movie card. The hash URL opens a linkable details page. Scroll down to see credits, cast, trailer, and similar movies; selecting a similar movie opens its details and browser Back returns to the previous movie. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings use TMDB's similar movie list when available.
 
-The artwork is intentionally generated with CSS typography and shapes, so every card works without external image services. Optional TMDB poster integration is not included. Google Fonts enhances typography when available; system sans-serif fonts work offline.
+Cards use TMDB posters when available and retain a CSS artwork fallback. Google Fonts enhances typography when available; system sans-serif fonts work offline.
 
 ## How recommendations work
 
@@ -92,12 +100,16 @@ The model and sparse matrix are cached once per process. Neighbor queries run on
 
 | Endpoint | Response |
 | --- | --- |
-| `GET /api/search?q=toy` | Up to eight title strings, ranked by original rating count |
-| `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | List of `{title, genres, score}` |
-| `GET /api/movies/popular` | Up to twelve `{title, genres, rating_count}` records |
+| `GET /api/search?q=toy` | Up to eight `{movie_id, title}` records, ranked by original rating count |
+| `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | List of `{movie_id, title, genres, score}` |
+| `GET /api/movies/popular` | Up to twelve `{movie_id, title, genres, rating_count}` records |
+| `GET /api/movie/{movie_id}` | MovieLens basics combined with TMDB details, credits, trailer and certification |
+| `GET /api/movie/{movie_id}/similar?n=12` | Similar movie records with ids, year, genres, poster and score when available |
 | `GET /` | Frontend |
 
-`genres` is the MovieLens pipe-separated string. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend uses text nodes for catalog content and cancels stale requests.
+`genres` in recommendation results is the MovieLens pipe-separated string; details and similar movie responses use genre arrays. Movie ids are MovieLens ids, mapped to TMDB through `links.csv`. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown ids and titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend builds content with text nodes, validates image URLs, and cancels stale requests.
+
+The footer shows the approved TMDB logo and attribution. It also includes TMDB's required notice: “This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.” Review the [TMDB attribution guidance](https://developer.themoviedb.org/docs/faq) before using this project commercially.
 
 ## Tests
 
@@ -105,7 +117,7 @@ The model and sparse matrix are cached once per process. Neighbor queries run on
 python -m pytest -q
 ```
 
-Tests create small synthetic CSVs, so they run offline and do not depend on changes to MovieLens. They check known nearest neighbors, ordering, self exclusion, limits, case normalization, fuzzy/ambiguous/under-rated titles, validation, literal autocomplete, popularity, cached model reuse, and API responses.
+Tests create small synthetic CSVs and mock TMDB responses, so they run offline and do not depend on live services. They check nearest neighbors, MovieLens-to-TMDB details mapping, missing fields, API failures, missing-key behavior, TTL caching, fallback recommendations, validation, and frontend static export behavior.
 
 ## Project layout
 
@@ -115,11 +127,13 @@ movie-recommender/
     __init__.py
     main.py
     recommender.py
+    tmdb.py
     download_data.py
     static/
       index.html
       style.css
       script.js
+  .env.example
   data/
   tests/test_recommender.py
   requirements.txt
@@ -138,5 +152,7 @@ Raw cosine similarity can favor widely rated movies. Missing ratings are treated
 - Add shared-rater shrinkage and mean-centered ratings to reduce noisy similarities.
 - Blend multiple selected movies into a weighted taste profile.
 - Combine genre or text features with collaborative filtering for sparse or new titles.
-- Add server-side TMDB poster lookup with caching and API-key environment configuration.
+- Prewarm the TMDB cache for the most popular titles when a Python service starts.
+- Add request throttling and a shared cache if the API is exposed to higher traffic.
 - For larger datasets, construct sparse matrices directly and precompute top-k neighbors.
+
