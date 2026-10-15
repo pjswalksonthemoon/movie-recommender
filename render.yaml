@@ -18,8 +18,16 @@ services:
       - key: APP_ENV
         value: production
       - key: SECRET_KEY
-        sync: false
+        generateValue: true
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: reelwise-database
+          property: connectionString
       - key: TMDB_API_KEY
         sync: false
+
+databases:
+  - name: reelwise-database
+    databaseName: reelwise
+    plan: free
+    region: frankfurt

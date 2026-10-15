@@ -69,7 +69,7 @@ python -m app.download_data
 
 ## Optional alternative: deploy on Render
 
-The included `render.yaml` defines a Python web service. Set `TMDB_API_KEY`, `SECRET_KEY`, `APP_ENV=production`, and a persistent PostgreSQL `DATABASE_URL` in the service environment. Run migrations before startup (`python -m alembic upgrade head`). Render's ephemeral filesystem is unsuitable for a durable SQLite watchlist database. The frontend and API share one URL.
+The included `render.yaml` creates a Python web service and a free PostgreSQL database. Render generates `SECRET_KEY`, connects `DATABASE_URL`, sets `APP_ENV=production`, and runs migrations on startup. Open [New Blueprint on Render](https://dashboard.render.com/blueprint/new?repo=https://github.com/pjswalksonthemoon/movie-recommender), connect the GitHub repository if prompted, enter your `TMDB_API_KEY` in the secret field, then apply the Blueprint. The frontend and API share the new `onrender.com` URL. Keep the TMDB key in Render, not in GitHub or browser code. Free Render PostgreSQL databases currently expire after 30 days; upgrade or move the database before that if the watchlists need to persist longer.
 
 For manual Web Service setup, use these commands:
 
