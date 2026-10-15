@@ -11,4 +11,6 @@ data/*.zip
 .env.*
 !.env.example
 dist/
+*.db
+*.sqlite3
 

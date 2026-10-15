@@ -141,7 +141,7 @@ def test_movie_endpoints_validate_unknown_ids_and_include_navigation_ids(client)
     assert http.get("/api/movie/0").status_code == 422
     assert http.get("/api/movie/999").status_code == 404
     assert http.get("/api/movie/1/similar?n=0").status_code == 422
-    assert http.get("/api/search?q=alpha").json()[0]["movie_id"] == 1
+    assert http.get("/api/movielens/search?q=alpha").json()[0]["movie_id"] == 1
     assert "movie_id" in http.get("/api/movies/popular").json()[0]
     assert "movie_id" in http.get("/api/recommend?title=Alpha%20(2000)").json()[0]
 
@@ -202,11 +202,11 @@ def test_card_endpoints_enrich_and_fall_back_individually(client):
     assert popular[0]["summary"] == "A sharp drama."
     assert popular[0]["director"]["id"] == 11 and popular[0]["cast"][0]["id"] == 22
     assert popular[1]["poster_url"] is None and popular[1]["director"] is None
-    assert "poster_url" in http.get("/api/search?q=alpha").json()[0]
+    assert "poster_url" in http.get("/api/movielens/search?q=alpha").json()[0]
     assert "summary" in http.get("/api/recommend?title=Alpha%20(2000)").json()[0]
     assert "cast" in http.get("/api/movie/1/similar").json()[0]
     tmdb.failure = True
-    assert http.get("/api/search?q=beta").json()[0]["poster_url"] is None
+    assert http.get("/api/movielens/search?q=beta").json()[0]["poster_url"] is None
 
 
 def test_person_details_success_missing_key_and_tmdb_failure(client):

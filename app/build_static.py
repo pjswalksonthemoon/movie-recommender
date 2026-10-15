@@ -12,11 +12,12 @@ def export_site(engine: MovieRecommender, destination: Path) -> None:
     """Export the catalog and top 50 neighbors; no individual ratings are exported."""
     destination.mkdir(parents=True, exist_ok=True)
     source = Path(__file__).parent / "static"
-    for name in ("style.css", "script.js", "static-api.js"):
+    for name in ("style.css", "script.js", "discovery.js", "static-api.js"):
         shutil.copyfile(source / name, destination / name)
     html = (source / "index.html").read_text(encoding="utf-8")
     html = html.replace('/static/', './').replace('href="/"', 'href="./"')
     html = html.replace('<script src="./script.js" defer>', '<script src="./static-api.js" defer></script><script src="./script.js" defer>')
+    html = html.replace('<script src="./discovery.js" defer>', '<script>window.reelwiseStatic = true;</script><script src="./discovery.js" defer>')
     (destination / "index.html").write_text(html, encoding="utf-8")
     (destination / ".nojekyll").write_text("", encoding="utf-8")
 

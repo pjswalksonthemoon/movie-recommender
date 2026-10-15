@@ -6,7 +6,7 @@ services:
     region: frankfurt
     branch: main
     buildCommand: python -m pip install -r requirements.txt && python -m app.download_data
-    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    startCommand: python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /api/movies/popular
     envVars:
       - key: PYTHONUNBUFFERED
@@ -15,3 +15,11 @@ services:
         value: "1"
       - key: OPENBLAS_NUM_THREADS
         value: "1"
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: TMDB_API_KEY
+        sync: false

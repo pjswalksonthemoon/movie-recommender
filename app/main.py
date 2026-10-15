@@ -13,6 +13,12 @@ from fastapi.staticfiles import StaticFiles
 
 from .recommender import RecommendationError, get_engine
 from .tmdb import TMDBClient, TMDBError, basic_card, image_url
+from .auth import router as auth_router, validate_production_secret
+from .media.anilist import AniListProvider
+from .media.tmdb import TMDBProvider
+from .media.service import MediaService
+from .media.routes import router as media_router
+from .watchlists import router as watchlist_router
 
 load_dotenv()
 STATIC = Path(__file__).parent / "static"
@@ -23,17 +29,24 @@ TMDB_IMAGE = "https://image.tmdb.org/t/p/"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_secret()
     app.state.engine = get_engine()
     app.state.tmdb = TMDBClient(os.getenv("TMDB_API_KEY"))
+    app.state.media = MediaService(TMDBProvider(os.getenv("TMDB_API_KEY")),
+                                   AniListProvider(), app.state.engine)
     try:
         yield
     finally:
         app.state.tmdb.close()
         await app.state.tmdb.aclose()
+        await app.state.media.close()
 
 
 app = FastAPI(title="Reelwise", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+app.include_router(auth_router)
+app.include_router(media_router)
+app.include_router(watchlist_router)
 
 
 def _catalog_card(movie_id: int) -> dict[str, Any]:
@@ -47,13 +60,14 @@ async def _enrich_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     async def one(row: dict[str, Any]) -> dict[str, Any]:
         movie_id = int(row["movie_id"])
         basic = _catalog_card(movie_id)
-        summary = await app.state.tmdb.card_summary(engine.tmdb_ids.get(movie_id), basic)
+        tmdb_id = engine.tmdb_ids.get(movie_id)
+        summary = await app.state.tmdb.card_summary(tmdb_id, basic)
         extras = {key: value for key, value in row.items() if key not in {"title", "genres", "year", "poster", "poster_url"}}
-        return {**summary, **extras}
+        return {**summary, **extras, "media_id": f"tmdb:movie:{tmdb_id}" if tmdb_id else None}
     return await asyncio.gather(*(one(row) for row in rows))
 
 
-@app.get("/api/search")
+@app.get("/api/movielens/search")
 async def search(q: Title):
     return await _enrich_cards(app.state.engine.search(q))
 
@@ -88,7 +102,8 @@ def _basic_movie(movie_id: int) -> dict[str, Any]:
     row = rows.iloc[0]
     title = str(row.title)
     return {
-        "movie_id": movie_id, "title": title, "year": _year(title), "tagline": "",
+        "movie_id": movie_id, "media_id": f"tmdb:movie:{engine.tmdb_ids[movie_id]}" if movie_id in engine.tmdb_ids else None,
+        "title": title, "year": _year(title), "tagline": "",
         "overview": "", "release_date": None, "runtime": None, "original_language": None,
         "genres": [genre for genre in str(row.genres).split("|") if genre and genre != "(no genres listed)"],
         "vote_average": None, "vote_count": 0, "poster": None, "backdrop": None,

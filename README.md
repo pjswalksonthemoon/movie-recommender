@@ -1,10 +1,10 @@
 # Reelwise · movie recommendations
 
-A runnable FastAPI app with an in-memory, item-based collaborative filtering engine, TMDB movie and person details, and a responsive HTML/CSS/JavaScript frontend. No database or frontend build is needed. The app works without a TMDB key using the basic MovieLens catalog.
+A runnable FastAPI media-discovery app with MovieLens collaborative filtering, live TMDB movie and TV listings, AniList anime, personal accounts and saved watchlists. The frontend is plain HTML/CSS/JavaScript with no build step. TMDB listings require a server-side key; AniList and the basic MovieLens catalogue do not.
 
 ## GitHub Pages hosting
 
-The GitHub Pages edition runs entirely in the browser. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, recommendations, and linkable MovieLens-only detail pages then run in the browser. Pages cannot securely access a private TMDB API key or the FastAPI routes, so posters, summaries, person links and profiles, cast, trailers, TMDB ratings, and TMDB-based fallback recommendations are available when the FastAPI app runs with a key. The Pages cards retain their styled poster fallback.
+The GitHub Pages edition remains a static MovieLens preview. GitHub Actions exports the catalog and fitted nearest neighbors at build time. Live TMDB/AniList requests, accounts and watchlists require the FastAPI server and cannot run on GitHub Pages. The static page explains this and retains its local MovieLens recommendation flow.
 
 To enable publication, open this repository's **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**. The `Deploy GitHub Pages` workflow builds and publishes on pushes to `main`; it can also be run manually from Actions. The expected URL is `https://pjswalksonthemoon.github.io/movie-recommender/` after deployment succeeds.
 
@@ -42,6 +42,7 @@ Install and start:
 
 ```sh
 python -m pip install -r requirements.txt
+python -m alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
@@ -49,13 +50,16 @@ Open http://127.0.0.1:8000. API documentation is at http://127.0.0.1:8000/docs. 
 
 On first startup, the app downloads the official MovieLens `ml-latest-small` archive and puts `movies.csv`, `ratings.csv`, and `links.csv` directly in `data/`. Startup waits for the download and model fitting; subsequent startups reuse the local files. Internet is required for dependency installation, the first data download, and TMDB requests. A failed download reports how to install the CSVs manually.
 
-To enable posters, card summaries, and full movie and person details, copy `.env.example` to `.env` and add your TMDB API key:
+Copy `.env.example` to `.env`. Set a TMDB API key to enable the live film and TV catalogue, full details and posters. Set a unique `SECRET_KEY` for production, and set `APP_ENV=production` so startup rejects an unchanged development secret. `DATABASE_URL` defaults to `sqlite:///./data/reelwise.db`; change it to a PostgreSQL URL for a persistent hosted database. Run `python -m alembic upgrade head` whenever migrations are added.
 
 ```text
 TMDB_API_KEY=your_tmdb_api_key
+SECRET_KEY=a-long-random-value
+DATABASE_URL=sqlite:///./data/reelwise.db
+APP_ENV=development
 ```
 
-Restart the server after editing `.env`. The key is read only by Python and is never included in a response or sent to the browser. Without it, detail pages show the MovieLens title, year, and genres with a limited information notice. TMDB results are cached in process memory for one hour. The key can also be set as an environment variable on a Python hosting service. Never add a real `.env` file to Git.
+Restart after changing `.env`. Keys stay on the backend. With no TMDB key, MovieLens recommendations and AniList anime remain available, while TMDB calls return partial/limited results. Provider details cache for one hour and browse/search lists for ten minutes. Never commit `.env`.
 
 To download ahead of time:
 
@@ -65,7 +69,7 @@ python -m app.download_data
 
 ## Optional alternative: deploy on Render
 
-The included `render.yaml` defines a free Python web service in Frankfurt. Connect this GitHub repository to Render as a Blueprint to use these settings. `.python-version` selects Python 3.13. The build installs dependencies and downloads MovieLens; the service starts one Uvicorn worker on Render's assigned port. The health check calls `/api/movies/popular`, which succeeds after model initialization. The frontend and API share one URL.
+The included `render.yaml` defines a Python web service. Set `TMDB_API_KEY`, `SECRET_KEY`, `APP_ENV=production`, and a persistent PostgreSQL `DATABASE_URL` in the service environment. Run migrations before startup (`python -m alembic upgrade head`). Render's ephemeral filesystem is unsuitable for a durable SQLite watchlist database. The frontend and API share one URL.
 
 For manual Web Service setup, use these commands:
 
@@ -73,14 +77,14 @@ For manual Web Service setup, use these commands:
 # Build command
 python -m pip install -r requirements.txt && python -m app.download_data
 # Start command
-python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
 ```
 
-Choose the Free plan, leave the root directory empty, and use `main`. Free services sleep when idle and may take time to wake up. The model is rebuilt when the process starts. No database or persistent disk is needed. Add `TMDB_API_KEY` in the Render service's environment variables to enable full movie details; it remains optional. A deployment configuration in GitHub alone does not create a running service; complete service creation in a connected Render account.
+The model is rebuilt when the process starts. A deployment configuration in GitHub alone does not create a running service; complete service creation in a connected host account.
 
 ## Use the website
 
-Search for a movie, use arrow keys and Enter to select an autocomplete result, or click any movie card. The hash URL opens a linkable details page. Scroll down to see credits, cast, trailer, and similar movies; selecting a similar movie opens its details and browser Back returns to the previous movie. With a TMDB key, cards show posters, short summaries, genres, rating, director, and three leading actors. Actor, director, and writer links open a person biography and up to 24 popular movie credits. MovieLens titles link back into Reelwise; other filmography titles open TMDB in a new tab. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings use TMDB's similar movie list when available.
+Browse Movies, TV or Anime with category rows and genre filters, or use live search. Details show cast, trailer, seasons and anime relations when available. Movie pages offer a plain outbound Letterboxd link; no sites are scraped. The original MovieLens recommendations and person pages remain. Register to save titles in the default Watchlist or named lists, track Plan to watch/Watching/Watched status and give a personal 1–10 rating. Session cookies are httpOnly, SameSite=Lax and Secure on HTTPS; state-changing requests require a custom header and session CSRF token.
 
 Cards use lazy-loaded TMDB posters when available and retain a CSS artwork fallback. The reserved 2:3 poster space prevents layout jumps. Google Fonts enhances typography when available; system sans-serif fonts work offline.
 
@@ -100,17 +104,26 @@ The model and sparse matrix are cached once per process. Neighbor queries run on
 
 | Endpoint | Response |
 | --- | --- |
-| `GET /api/search?q=toy` | Up to eight enriched movie cards, ranked by original rating count |
+| `GET /api/search?q=toy&type=all` | Unified live movie, TV and anime results with `partial` flag |
+| `GET /api/browse?type=anime&category=trending&page=1` | Paginated live catalogue, optional `genre` |
+| `GET /api/media/{media_id}` | Unified movie, TV or anime details |
+| `GET /api/media/{media_id}/similar` | Provider recommendations, blended with MovieLens for known films |
+| `GET /api/movielens/search?q=toy` | Original MovieLens title search and cards |
 | `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | Enriched movie cards with a collaborative-filtering match `score` |
 | `GET /api/movies/popular` | Up to twelve enriched movie cards with `rating_count` |
 | `GET /api/movie/{movie_id}` | MovieLens basics combined with TMDB details, credits, trailer and certification |
 | `GET /api/movie/{movie_id}/similar?n=12` | Enriched similar movie cards with match score when available |
 | `GET /api/person/{person_id}` | Biography, photo and up to 24 popular movie credits |
+| `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | Account and cookie session |
+| `GET`, `POST /api/watchlists` | Personal lists |
+| `GET`, `PATCH`, `DELETE /api/watchlists/{id}` | Read, rename or delete an owned list |
+| `POST /api/watchlists/{id}/items` | Save a unified `media_id` |
+| `PATCH`, `DELETE /api/watchlists/{id}/items/{media_id}` | Update status/rating or remove a saved title |
 | `GET /` | Frontend |
 
 All list endpoints return the same card fields: `movie_id`, `title`, `year`, `genres`, `poster_url`, `summary`, `rating` (percentage), `director: {id, name}`, and `cast: [{id, name}]`; match `score` or `rating_count` appears where relevant. Up to eight card summaries are fetched concurrently and cached in memory for an hour. Individual TMDB failures fall back to MovieLens title, year, and genres. Movie ids are MovieLens ids, mapped to TMDB through `links.csv`. Filmography returns `movie_id: null` when a TMDB movie is absent from MovieLens. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown ids and titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend builds content with text nodes, validates image URLs, and cancels stale requests.
 
-The footer shows the approved TMDB logo and attribution. It also includes TMDB's required notice: “This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.” Review the [TMDB attribution guidance](https://developer.themoviedb.org/docs/faq) before using this project commercially.
+The footer shows “Powered by TMDB” with the TMDB logo, “Anime data from AniList”, and TMDB's required notice. Review [TMDB attribution guidance](https://developer.themoviedb.org/docs/faq) before commercial use. Movie details link to Letterboxd with `https://letterboxd.com/tmdb/{tmdb_id}` as an outbound link only.
 
 ## Tests
 
@@ -118,7 +131,7 @@ The footer shows the approved TMDB logo and attribution. It also includes TMDB's
 python -m pytest -q
 ```
 
-Tests create small synthetic CSVs and mock TMDB responses, so they run offline and do not depend on live services. They check nearest neighbors, MovieLens-to-TMDB details mapping, card summary truncation and caching, person filmography, missing fields, API failures, missing-key behavior, fallback recommendations, validation, and frontend static export behavior.
+Tests create small synthetic CSVs and mock provider responses, so they run offline. They cover nearest neighbors, MovieLens/TMDB details, AniList and TV mapping, cache and retry behavior, partial search results, auth sessions and throttling, private watchlists, validation and the static export.
 
 ## Project layout
 
@@ -129,18 +142,32 @@ movie-recommender/
     main.py
     recommender.py
     tmdb.py
+    auth.py
+    db.py
+    watchlists.py
+    media/
+      models.py
+      cache.py
+      tmdb.py
+      anilist.py
+      service.py
+      routes.py
     download_data.py
     static/
       index.html
       style.css
       script.js
+      discovery.js
       static-api.js
     build_static.py
+  migrations/
+  alembic.ini
   .env.example
   data/
   tests/
     test_recommender.py
     test_movie_details.py
+    test_media_accounts.py
     static-api.test.cjs
   requirements.txt
   README.md
@@ -150,7 +177,7 @@ movie-recommender/
 
 Data: [GroupLens MovieLens](https://grouplens.org/datasets/movielens/latest/) and its [dataset README and license terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html). The small dataset is historical, so recent releases are generally absent. Respect the dataset's usage and redistribution terms. The downloader keeps `movies.csv`, `ratings.csv`, and `links.csv`; consult the linked README for attribution and usage conditions. `ml-latest-small` is a mutable release, so later downloads can differ.
 
-Raw cosine similarity can favor widely rated movies. Missing ratings are treated as zeros, and this version does not normalize individual rating habits or measure shared-rater confidence. It recommends from one selected movie; a multi-rating user profile is a future extension. Development `--reload` is for local use; production should use a supervised process and appropriate HTTPS deployment.
+Raw cosine similarity can favor widely rated movies. Missing ratings are treated as zeros, and this version does not normalize individual rating habits or measure shared-rater confidence. It recommends from one selected movie; a multi-rating user profile is a future extension. The server-side cache is per process, so horizontally scaled deployments should use a shared cache. Development `--reload` is for local use; production should use a supervised process, persistent database and HTTPS.
 
 ## Ideas for improvement
 

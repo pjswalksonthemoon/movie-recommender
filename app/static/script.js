@@ -9,7 +9,16 @@ const detailView = document.querySelector('#detail-view');
 const personView = document.querySelector('#person-view');
 const trailerDialog = document.querySelector('#trailer-dialog');
 const trailerFrame = trailerDialog.querySelector('.trailer-frame');
-const safeImage = value => typeof value === 'string' && /^https:\/\/image\.tmdb\.org\/t\/p\/(w\d+|original)\/[\w./-]+$/.test(value) ? value : null;
+const safeImage = value => {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return null;
+    if (url.hostname === 'image.tmdb.org' && url.pathname.startsWith('/t/p/')) return url.href;
+    if (/^s\d+\.anilist\.co$/.test(url.hostname) && url.pathname.startsWith('/file/')) return url.href;
+  } catch {}
+  return null;
+};
 let timer, searchController, pageController, active = -1, titles = [], searchVersion = 0, homeLoaded = false;
 
 function element(tag, className, text) {
@@ -47,7 +56,7 @@ function movieGenres(movie) {
   return Array.isArray(movie.genres) ? movie.genres : String(movie.genres || '').split('|').filter(Boolean);
 }
 function movieYear(movie) {
-  return movie.year || movie.title.match(/\((\d{4})\)\s*$/)?.[1] || '—';
+  return movie.year || String(movie.title || '').match(/\((\d{4})\)\s*$/)?.[1] || '—';
 }
 function navigateToMovie(movieId) {
   if (!Number.isInteger(Number(movieId)) || Number(movieId) < 1) return;
@@ -62,6 +71,12 @@ function navigateToPerson(personId) {
   route();
 }
 function personLink(person) {
+  if (person.external_url && /^https:\/\/anilist\.co\/(staff|character)\/\d+$/.test(person.external_url)) {
+    const external = element('a', 'person-link', person.name);
+    external.href = person.external_url; external.target = '_blank'; external.rel = 'noopener noreferrer';
+    external.addEventListener('click', event => event.stopPropagation());
+    return external;
+  }
   const link = element('a', 'person-link', person.name);
   link.href = `#/person/${person.id}`;
   link.addEventListener('click', event => { event.stopPropagation(); event.preventDefault(); navigateToPerson(person.id); });
@@ -89,9 +104,10 @@ function makeMovieCard(movie, compact = false) {
   const tags = element('div', 'tags');
   movieGenres(movie).slice(0, 2).forEach(genre => tags.append(element('span', 'tag', genre)));
   body.append(tags);
-  if (movie.summary) body.append(element('p', 'card-summary', movie.summary));
-  if (movie.director?.id) {
-    const line = element('p', 'card-people'); line.append(document.createTextNode('Directed by '), personLink(movie.director)); body.append(line);
+  if (movie.summary || movie.summary_short) body.append(element('p', 'card-summary', movie.summary || movie.summary_short));
+  const director = movie.director || movie.director_or_creators?.[0];
+  if (director?.id) {
+    const line = element('p', 'card-people'); line.append(document.createTextNode(movie.media_type === 'tv' ? 'Created by ' : 'Directed by '), personLink(director)); body.append(line);
   }
   if (movie.cast?.length) {
     const line = element('p', 'card-people'); line.append(document.createTextNode('Starring '));
@@ -102,12 +118,19 @@ function makeMovieCard(movie, compact = false) {
     body.append(line);
   }
   card.append(art, body);
-  const open = () => movie.movie_id || movie.id ? navigateToMovie(movie.movie_id || movie.id) : load(movie.title);
+  const open = () => {
+    if (typeof movie.id === 'string' && movie.media_type) window.navigateToMedia?.(movie.id);
+    else if (movie.media_id && !window.reelwiseStatic && window.navigateToMedia) window.navigateToMedia(movie.media_id);
+    else if (movie.movie_id || Number.isInteger(movie.id)) navigateToMovie(movie.movie_id || movie.id);
+    else load(movie.title);
+  };
   card.addEventListener('click', open);
   card.addEventListener('keydown', event => {
     if (event.target !== card || !['Enter', ' '].includes(event.key)) return;
     event.preventDefault(); open();
   });
+  const mediaId = movie.media_id || (typeof movie.id === 'string' ? movie.id : null);
+  window.reelwiseAddBookmark?.(card, mediaId);
   return card;
 }
 function makePosterPlaceholder(title) {
@@ -194,6 +217,7 @@ function renderDetails(movie, movieId) {
   back.addEventListener('click', () => history.state?.reelwise ? history.back() : goHome());
   info.append(back, element('p', 'eyebrow detail-eyebrow', 'MOVIE DETAILS'));
   const title = element('h1', 'detail-title', movie.title); info.append(title);
+  window.reelwiseAddBookmark?.(info, movie.media_id);
   title.tabIndex = -1;
   const year = movie.year || movie.release_date?.slice(0, 4);
   const subtitle = [year, movie.certification, movie.runtime ? `${movie.runtime} min` : null].filter(Boolean).join('  •  ');
@@ -374,6 +398,7 @@ function goHome() {
   history.pushState({ reelwise: true }, '', '#/'); route();
 }
 function route() {
+  if (window.discoveryRoute?.(location.hash)) return;
   const match = location.hash.match(/^#\/movie\/(\d+)\/?$/);
   if (match) showMovie(Number(match[1]));
   else if (location.hash.match(/^#\/person\/(\d+)\/?$/)) showPerson(Number(location.hash.match(/^#\/person\/(\d+)\/?$/)[1]));
@@ -391,7 +416,8 @@ input.addEventListener('input', () => {
   timer = setTimeout(async () => {
     searchController = new AbortController();
     try {
-      titles = await request(`/api/search?q=${encodeURIComponent(query)}`, searchController.signal);
+      const searchResult = await request(`/api/search?q=${encodeURIComponent(query)}&type=all`, searchController.signal);
+      titles = Array.isArray(searchResult) ? searchResult : searchResult.items || [];
       if (version !== searchVersion) return;
       suggestions.replaceChildren(); active = -1;
       titles.forEach((movie, i) => {
@@ -419,7 +445,10 @@ input.addEventListener('keydown', event => {
     event.preventDefault(); active = (active + (event.key === 'ArrowDown' ? 1 : -1) + titles.length) % titles.length;
     [...suggestions.children].forEach((option, i) => option.setAttribute('aria-selected', String(i === active)));
     input.setAttribute('aria-activedescendant', `suggestion-${active}`); suggestions.children[active].scrollIntoView({ block: 'nearest' });
-  } else if (event.key === 'Enter' && active >= 0) { event.preventDefault(); navigateToMovie(titles[active].movie_id); }
+  } else if (event.key === 'Enter' && active >= 0) { event.preventDefault();
+    const selected = titles[active];
+    if (selected.media_type) window.navigateToMedia?.(selected.id); else navigateToMovie(selected.movie_id);
+  }
 });
 input.addEventListener('blur', () => setTimeout(() => {
   if (!suggestions.contains(document.activeElement)) closeSuggestions();
@@ -427,7 +456,9 @@ input.addEventListener('blur', () => setTimeout(() => {
 document.querySelector('#search-form').addEventListener('submit', event => {
   event.preventDefault(); const query = input.value.trim();
   const match = titles.find(movie => movie.title.toLocaleLowerCase() === query.toLocaleLowerCase()) || (titles.length === 1 ? titles[0] : null);
-  if (match) navigateToMovie(match.movie_id); else if (query) load(query); else input.focus();
+  if (match?.media_type) window.navigateToMedia?.(match.id);
+  else if (match) navigateToMovie(match.movie_id);
+  else if (query) load(query); else input.focus();
 });
 document.querySelector('#reset').addEventListener('click', () => load());
 window.addEventListener('hashchange', route);
