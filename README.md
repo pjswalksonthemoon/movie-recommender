@@ -1,106 +1,111 @@
-🎬 Movie Recommender
+# Reelwise · movie recommendations
 
-A movie recommendation website powered by item-based collaborative filtering. Search for a movie you like and get a list of similar films, based on the rating patterns of thousands of real users.
+A runnable FastAPI app with an in-memory, item-based collaborative filtering engine and a responsive HTML/CSS/JavaScript frontend. No database, frontend build, account, or API key is needed.
 
-Built with Python, FastAPI and scikit-learn, with a lightweight vanilla JavaScript front end.
+## Setup and run
 
-Features
-Smart recommendations: item-based collaborative filtering using cosine similarity
-Live search: autocomplete as you type, with fuzzy matching for ambiguous titles
-Popular movies: home page shows the most-rated films to get you started
-Match scores: every recommendation shows how closely it matches your pick
-Responsive dark UI: works on desktop and mobile
-Optional posters: add a TMDB API key to show movie posters (the site works fine without one)
-Tested: unit tests for the recommendation engine
-How it works
+Install Python 3.11 or newer (tested on Python 3.13). Open a terminal in this `movie-recommender` directory.
 
-The engine uses item-based collaborative filtering:
+```sh
+python -m venv .venv
+```
 
-Load the MovieLens ratings and build a movie × user matrix, where each cell is the rating a user gave a movie.
-Filter out movies with fewer than 10 ratings and users with fewer than 5, to reduce noise.
-Compute the cosine similarity between movies. Two movies are similar if the same users tend to rate them in the same way.
-When you pick a movie, the engine returns the n nearest neighbours with a similarity score.
+Activate it on Windows PowerShell:
 
-In plain English: people who liked this movie also liked these ones.
+```powershell
+.venv\Scripts\Activate.ps1
+```
 
-Edge cases handled: unknown titles, ambiguous titles (fuzzy matches returned), and movies with too few ratings.
+Or on macOS/Linux:
 
-Tech stack
-Layer	Technology
-Backend	Python 3.11+, FastAPI
-ML / data	pandas, NumPy, scikit-learn
-Frontend	HTML, CSS, vanilla JavaScript
-Dataset	MovieLens ml-latest-small
-Testing	pytest
-Project structure
-movie-recommender/
-├── app/
-│   ├── main.py            # FastAPI app and routes
-│   ├── recommender.py     # Recommendation engine
-│   └── static/            # index.html, style.css, script.js
-├── data/                  # Dataset downloads here on first run
-├── tests/
-│   └── test_recommender.py
-├── requirements.txt
-└── README.md
-Getting started
-Prerequisites
-Python 3.11 or newer
-pip
-Installation
-bash
-# Clone the repository
-git clone https://github.com/<your-username>/movie-recommender.git
-cd movie-recommender
+```sh
+source .venv/bin/activate
+```
 
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+Install and start:
 
-# Install dependencies
-pip install -r requirements.txt
-Run the app
-bash
+```sh
+python -m pip install -r requirements.txt
 uvicorn app.main:app --reload
+```
 
-Then open http://127.0.0.1:8000 in your browser. The MovieLens dataset downloads automatically on first run.
+Open http://127.0.0.1:8000. API documentation is at http://127.0.0.1:8000/docs. Stop with Ctrl+C. If activation is restricted on Windows, run `.venv\Scripts\python.exe -m pip install -r requirements.txt` and `.venv\Scripts\python.exe -m uvicorn app.main:app --reload` instead.
 
-Optional: movie posters
+On first startup, the app downloads the official MovieLens `ml-latest-small` archive and puts `movies.csv` and `ratings.csv` directly in `data/`. Startup waits for the download and model fitting; subsequent startups reuse the local files. Internet is required for dependency installation and the first data download. A failed download reports how to install the CSVs manually. Existing CSVs are never downloaded again automatically.
 
-To display posters, get a free API key from TMDB and set it as an environment variable:
+To download ahead of time:
 
-bash
-export TMDB_API_KEY=your_key_here     # Windows: set TMDB_API_KEY=your_key_here
+```sh
+python -m app.download_data
+```
 
-Without a key, the site shows styled placeholder cards instead.
+## Use it
 
-Run the tests
-bash
-pytest
-API reference
-Endpoint	Description
-GET /api/search?q=toy	Autocomplete: up to 8 matching movie titles
-GET /api/recommend?title=Toy Story (1995)&n=10	Returns n recommendations as {title, genres, score}
-GET /api/movies/popular	Top 12 most-rated movies
-GET /	Serves the front end
+Search for a movie, use arrow keys and Enter to select an autocomplete result, or click a popular movie. Each recommendation can become the starting point for another search. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings show an explanation. Back to popular returns to the home collection.
 
-Example response for /api/recommend:
+The artwork is intentionally generated with CSS typography and shapes, so every card works without external image services. Optional TMDB poster integration is not included. Google Fonts enhances typography when available; system sans-serif fonts work offline.
 
-json
-[
-  { "title": "Toy Story 2 (1999)", "genres": "Adventure|Animation|Children|Comedy|Fantasy", "score": 0.87 },
-  { "title": "Monsters, Inc. (2001)", "genres": "Adventure|Animation|Children|Comedy|Fantasy", "score": 0.81 }
-]
-Ideas for improvement
-Personalised recommendations from a user's own ratings
-Hybrid model combining collaborative and content-based (genre) filtering
-Larger dataset (ml-25m) with a sparse-matrix pipeline
-Deployment to Render, Railway or Fly.io
-Movie detail pages with cast, trailers and reviews
-Acknowledgements
-MovieLens dataset by GroupLens Research
-Movie data and posters from TMDB (optional)
-Inspired by Code Heroku's Building a Movie Recommendation Engine tutorial
-License
+## How recommendations work
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+1. Load the catalog and ratings with pandas. Count ratings in the original dataset for the popularity list.
+2. Remove movies with fewer than ten ratings and users with fewer than five ratings. Repeat until stable, so removing one group cannot leave the other below its minimum.
+3. Make a movie-by-user pivot table. Each cell holds a user's rating; missing ratings become zero. Convert it to a NumPy float32 array and then a SciPy sparse matrix.
+4. Fit scikit-learn `NearestNeighbors(metric="cosine", algorithm="brute")`. Two movies are similar when their rating vectors point in a similar direction: the same users tend to rate them similarly.
+5. For a selected movie, retrieve nearby movies, remove the selected movie, and return `1 - cosine_distance`, clipped to 0–1. A displayed 80% match means 0.80 cosine similarity; it is **not** an 80% chance of enjoying the movie.
+
+The model and sparse matrix are cached once per process. Neighbor queries run on demand without fitting again or storing an all-pairs similarity matrix. FastAPI executes synchronous endpoints in its thread pool. A server restart or development reload builds a fresh model; multiple worker processes each hold their own model.
+
+`app.recommender.get_recommendations(movie_title, n=10)` is also usable directly from Python. Exact title matching ignores case and surrounding whitespace. A unique substring is accepted; multiple substring matches raise `RecommendationError(code="ambiguous_title")`. Unrecognized titles raise `unknown_title` with fuzzy suggestions. Known movies excluded from the model raise `insufficient_ratings`. `n` must be an integer from 1 through 50; fewer results are returned when fewer eligible neighbors exist.
+
+## API
+
+| Endpoint | Response |
+| --- | --- |
+| `GET /api/search?q=toy` | Up to eight title strings, ranked by original rating count |
+| `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | List of `{title, genres, score}` |
+| `GET /api/movies/popular` | Up to twelve `{title, genres, rating_count}` records |
+| `GET /` | Frontend |
+
+`genres` is the MovieLens pipe-separated string. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend uses text nodes for catalog content and cancels stale requests.
+
+## Tests
+
+```sh
+python -m pytest -q
+```
+
+Tests create small synthetic CSVs, so they run offline and do not depend on changes to MovieLens. They check known nearest neighbors, ordering, self exclusion, limits, case normalization, fuzzy/ambiguous/under-rated titles, validation, literal autocomplete, popularity, cached model reuse, and API responses.
+
+## Project layout
+
+```text
+movie-recommender/
+  app/
+    __init__.py
+    main.py
+    recommender.py
+    download_data.py
+    static/
+      index.html
+      style.css
+      script.js
+  data/
+  tests/test_recommender.py
+  requirements.txt
+  README.md
+```
+
+## Data and limitations
+
+Data: [GroupLens MovieLens](https://grouplens.org/datasets/movielens/latest/) and its [dataset README and license terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html). The small dataset is historical, so recent releases are generally absent. Respect the dataset's usage and redistribution terms. The downloader keeps only the two required CSVs; consult the linked README for attribution and usage conditions. `ml-latest-small` is a mutable release, so later downloads can differ.
+
+Raw cosine similarity can favor widely rated movies. Missing ratings are treated as zeros, and this version does not normalize individual rating habits or measure shared-rater confidence. It recommends from one selected movie; a multi-rating user profile is a future extension. Development `--reload` is for local use; production should use a supervised process and appropriate HTTPS deployment.
+
+## Ideas for improvement
+
+- Evaluate ranking quality on held-out ratings using recall@k and NDCG.
+- Add shared-rater shrinkage and mean-centered ratings to reduce noisy similarities.
+- Blend multiple selected movies into a weighted taste profile.
+- Combine genre or text features with collaborative filtering for sparse or new titles.
+- Add server-side TMDB poster lookup with caching and API-key environment configuration.
+- For larger datasets, construct sparse matrices directly and precompute top-k neighbors.
