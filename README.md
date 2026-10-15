@@ -39,7 +39,22 @@ To download ahead of time:
 python -m app.download_data
 ```
 
-## Use it
+## Deploy on Render
+
+The included `render.yaml` defines a free Python web service in Frankfurt. Connect this GitHub repository to Render as a Blueprint to use these settings. `.python-version` selects Python 3.13. The build installs dependencies and downloads MovieLens; the service starts one Uvicorn worker on Render's assigned port. The health check calls `/api/movies/popular`, which succeeds after model initialization. The frontend and API share one URL.
+
+For manual Web Service setup, use these commands:
+
+```sh
+# Build command
+python -m pip install -r requirements.txt && python -m app.download_data
+# Start command
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
+
+Choose the Free plan, leave the root directory empty, and use `main`. Free services sleep when idle and may take time to wake up. The model is rebuilt when the process starts. No database, persistent disk, or API secrets are needed. A deployment configuration in GitHub alone does not create a running service; complete service creation in a connected Render account.
+
+## Use the website
 
 Search for a movie, use arrow keys and Enter to select an autocomplete result, or click a popular movie. Each recommendation can become the starting point for another search. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings show an explanation. Back to popular returns to the home collection.
 
