@@ -30,6 +30,7 @@ def client(engine, monkeypatch):
 
         def __init__(self):
             self.payload = {}
+            self.responses = {}
             self.failure = False
             self.calls = []
 
@@ -37,7 +38,7 @@ def client(engine, monkeypatch):
             self.calls.append(path)
             if self.failure:
                 raise TMDBError("TMDB is unavailable")
-            return self.payload
+            return self.responses.get(path, self.payload)
 
         def close(self):
             pass
@@ -117,8 +118,9 @@ def test_similar_uses_collaborative_filtering_and_tmdb_fallback(client):
     assert result[0]["genres"] == ["Drama", "Comedy"]
     assert all(item["movie_id"] != 1 for item in result)
 
-    tmdb.payload = {"results": [{"id": 102, "title": "Alpha Again", "release_date": "2001-01-01",
-                                  "poster_path": "/alpha.jpg", "genres": [{"name": "Drama"}]}]}
+    tmdb.responses["/movie/104/similar"] = {"results": [{"id": 102, "title": "Alpha Again", "release_date": "2001-01-01",
+                                                          "poster_path": "/alpha.jpg", "genre_ids": [18]}]}
+    tmdb.responses["/genre/movie/list"] = {"genres": [{"id": 18, "name": "Drama"}]}
     fallback = http.get("/api/movie/4/similar?n=2").json()
     assert fallback == [{"id": 2, "movie_id": 2, "title": "Alpha Again", "year": "2001",
                          "genres": ["Drama"], "poster": "https://image.tmdb.org/t/p/w500/alpha.jpg", "score": None}]

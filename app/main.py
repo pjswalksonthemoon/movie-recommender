@@ -185,13 +185,23 @@ def similar_movies(movie_id: int, n: Count = 12):
     similar_results = payload.get("results") or []
     if not isinstance(similar_results, list):
         return results
+    genre_map: dict[int, str] = {}
+    if any(isinstance(item, dict) and item.get("genre_ids") for item in similar_results):
+        try:
+            genre_payload = app.state.tmdb.get("/genre/movie/list")
+            genre_map = {genre["id"]: genre["name"] for genre in (genre_payload.get("genres") or [])
+                         if isinstance(genre, dict) and isinstance(genre.get("id"), int) and genre.get("name")}
+        except TMDBError:
+            pass
     for item in similar_results:
         if not isinstance(item, dict):
             continue
         mapped_id = id_by_tmdb.get(item.get("id"))
         if not mapped_id or mapped_id == movie_id:
             continue
-        genres = [genre["name"] for genre in item.get("genres", []) if isinstance(genre, dict) and genre.get("name")]
+        genres = [genre["name"] for genre in (item.get("genres") or []) if isinstance(genre, dict) and genre.get("name")]
+        if not genres:
+            genres = [genre_map[genre_id] for genre_id in item.get("genre_ids", []) if genre_id in genre_map]
         results.append(_movie_result(mapped_id, item.get("title") or "Untitled movie", genres or basic["genres"], None,
                                      f"{TMDB_IMAGE}w500{item['poster_path']}" if item.get("poster_path") else None,
                                      item.get("release_date")))
