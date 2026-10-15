@@ -1,5 +1,6 @@
 """FastAPI routes and static frontend; run with ``uvicorn app.main:app --reload``."""
 from contextlib import asynccontextmanager
+import asyncio
 from pathlib import Path
 import os
 import re
@@ -11,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .recommender import RecommendationError, get_engine
-from .tmdb import TMDBClient, TMDBError
+from .tmdb import TMDBClient, TMDBError, basic_card, image_url
 
 load_dotenv()
 STATIC = Path(__file__).parent / "static"
@@ -28,29 +29,47 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.tmdb.close()
+        await app.state.tmdb.aclose()
 
 
 app = FastAPI(title="Reelwise", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+def _catalog_card(movie_id: int) -> dict[str, Any]:
+    row = app.state.engine.catalog.loc[movie_id]
+    return basic_card(movie_id, str(row.title), str(row.genres))
+
+
+async def _enrich_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Enrich one list concurrently; each failed card retains its MovieLens data."""
+    engine = app.state.engine
+    async def one(row: dict[str, Any]) -> dict[str, Any]:
+        movie_id = int(row["movie_id"])
+        basic = _catalog_card(movie_id)
+        summary = await app.state.tmdb.card_summary(engine.tmdb_ids.get(movie_id), basic)
+        extras = {key: value for key, value in row.items() if key not in {"title", "genres", "year", "poster", "poster_url"}}
+        return {**summary, **extras}
+    return await asyncio.gather(*(one(row) for row in rows))
+
+
 @app.get("/api/search")
-def search(q: Title):
-    return app.state.engine.search(q)
+async def search(q: Title):
+    return await _enrich_cards(app.state.engine.search(q))
 
 
 @app.get("/api/recommend")
-def recommend(title: Title, n: Count = 10):
+async def recommend(title: Title, n: Count = 10):
     try:
-        return app.state.engine.get_recommendations(title, n)
+        return await _enrich_cards(app.state.engine.get_recommendations(title, n))
     except RecommendationError as exc:
         raise HTTPException(status_code=404 if exc.code == "unknown_title" else 422,
                             detail={"code": exc.code, "message": str(exc), "matches": exc.matches}) from exc
 
 
 @app.get("/api/movies/popular")
-def popular():
-    return app.state.engine.popular()
+async def popular():
+    return await _enrich_cards(app.state.engine.popular())
 
 
 def _year(title: str, release_date: str | None = None) -> str | None:
@@ -119,10 +138,10 @@ def _tmdb_movie(payload: dict[str, Any], basic: dict[str, Any]) -> dict[str, Any
         "vote_average": payload.get("vote_average"), "vote_count": payload.get("vote_count") or 0,
         "poster": f"{TMDB_IMAGE}w500{payload['poster_path']}" if payload.get("poster_path") else None,
         "backdrop": f"{TMDB_IMAGE}w1280{payload['backdrop_path']}" if payload.get("backdrop_path") else None,
-        "directors": [person.get("name") for person in crew if isinstance(person, dict) and person.get("job") == "Director" and person.get("name")],
-        "writers": [person.get("name") for person in crew if isinstance(person, dict) and person.get("job") in {"Writer", "Screenplay", "Story"} and person.get("name")],
+        "directors": [{"id": person.get("id"), "name": person["name"]} for person in crew if isinstance(person, dict) and person.get("job") == "Director" and person.get("name")],
+        "writers": [{"id": person.get("id"), "name": person["name"]} for person in crew if isinstance(person, dict) and person.get("job") in {"Writer", "Screenplay", "Story"} and person.get("name")],
         "certification": _certification(payload),
-        "cast": [{"name": person.get("name", "Unknown"), "character": person.get("character") or "",
+        "cast": [{"id": person.get("id"), "name": person.get("name", "Unknown"), "character": person.get("character") or "",
                   "profile": f"{TMDB_IMAGE}w185{person['profile_path']}" if person.get("profile_path") else None}
                  for person in cast[:12] if isinstance(person, dict)],
         "trailer_key": trailer.get("key") if trailer else None, "limited": False,
@@ -151,7 +170,7 @@ def _movie_result(movie_id: int, title: str, genres: str | list[str], score: flo
 
 
 @app.get("/api/movie/{movie_id}/similar")
-def similar_movies(movie_id: int, n: Count = 12):
+async def similar_movies(movie_id: int, n: Count = 12):
     basic = _basic_movie(movie_id)
     engine = app.state.engine
     results: list[dict[str, Any]] = []
@@ -159,32 +178,23 @@ def similar_movies(movie_id: int, n: Count = 12):
         neighbors = engine.get_recommendations(basic["title"], n)
         for neighbor in neighbors:
             other_id = neighbor["movie_id"]
-            poster = None
-            other_tmdb_id = engine.tmdb_ids.get(other_id)
-            if app.state.tmdb.enabled and other_tmdb_id:
-                try:
-                    data = app.state.tmdb.get(f"/movie/{other_tmdb_id}")
-                    if data.get("poster_path"):
-                        poster = f"{TMDB_IMAGE}w500{data['poster_path']}"
-                except TMDBError:
-                    pass
-            results.append(_movie_result(other_id, neighbor["title"], neighbor["genres"], neighbor["score"], poster))
+            results.append(_movie_result(other_id, neighbor["title"], neighbor["genres"], neighbor["score"]))
         if results:
-            return results
+            return await _enrich_cards(results)
     except RecommendationError:
         pass
 
     tmdb_id = engine.tmdb_ids.get(movie_id)
     if not app.state.tmdb.enabled or not tmdb_id:
-        return results
+        return await _enrich_cards(results)
     try:
         payload = app.state.tmdb.get(f"/movie/{tmdb_id}/similar")
     except TMDBError:
-        return results
+        return await _enrich_cards(results)
     id_by_tmdb = {tmdb: movie for movie, tmdb in engine.tmdb_ids.items()}
     similar_results = payload.get("results") or []
     if not isinstance(similar_results, list):
-        return results
+        return await _enrich_cards(results)
     genre_map: dict[int, str] = {}
     if any(isinstance(item, dict) and item.get("genre_ids") for item in similar_results):
         try:
@@ -207,10 +217,56 @@ def similar_movies(movie_id: int, n: Count = 12):
                                      item.get("release_date")))
         if len(results) == n:
             break
-    return results
+    return await _enrich_cards(results)
+
+
+@app.get("/api/person/{person_id}")
+def person_details(person_id: int):
+    """Return a TMDB biography plus up to 24 popular film credits."""
+    if person_id < 1:
+        raise HTTPException(status_code=422, detail="person_id must be positive.")
+    tmdb = app.state.tmdb
+    if not tmdb.enabled:
+        raise HTTPException(status_code=503, detail="Person details require TMDB_API_KEY.")
+    try:
+        payload = tmdb.get(f"/person/{person_id}", append_to_response="movie_credits")
+    except TMDBError as exc:
+        raise HTTPException(status_code=404 if exc.status_code == 404 else 502,
+                            detail="Person not found." if exc.status_code == 404 else "TMDB is unavailable right now.") from exc
+    credits = payload.get("movie_credits") or {}
+    if not isinstance(credits, dict):
+        credits = {}
+    cast = credits.get("cast") or []
+    crew = credits.get("crew") or []
+    credits_by_movie: dict[int, dict[str, Any]] = {}
+    for item in cast if isinstance(cast, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("id"), int):
+            credits_by_movie[item["id"]] = {**item, "role": f"as {item['character']}" if item.get("character") else "Actor"}
+    for item in crew if isinstance(crew, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("id"), int) and item.get("job") == "Director":
+            credits_by_movie.setdefault(item["id"], {**item, "role": "Director"})
+    movie_ids = {tmdb_id: movie_id for movie_id, tmdb_id in app.state.engine.tmdb_ids.items()}
+    filmography = []
+    for item in sorted(credits_by_movie.values(), key=lambda credit: float(credit.get("popularity") or 0), reverse=True)[:24]:
+        release = item.get("release_date") or ""
+        filmography.append({
+            "movie_id": movie_ids.get(item["id"]), "tmdb_id": item["id"],
+            "title": item.get("title") or item.get("original_title") or "Untitled movie",
+            "year": release[:4] if isinstance(release, str) and release[:4].isdigit() else None,
+            "poster_url": image_url(item.get("poster_path"), "w342"),
+            "role": item["role"],
+        })
+    return {
+        "id": person_id, "name": payload.get("name") or "Unknown person",
+        "photo_url": image_url(payload.get("profile_path"), "w500"),
+        "biography": payload.get("biography") or "",
+        "known_for_department": payload.get("known_for_department") or "",
+        "birthday": payload.get("birthday") or None,
+        "place_of_birth": payload.get("place_of_birth") or None,
+        "filmography": filmography,
+    }
 
 
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(STATIC / "index.html")
-

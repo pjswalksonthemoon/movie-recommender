@@ -1,10 +1,10 @@
 # Reelwise · movie recommendations
 
-A runnable FastAPI app with an in-memory, item-based collaborative filtering engine, TMDB movie details, and a responsive HTML/CSS/JavaScript frontend. No database or frontend build is needed. The app works without a TMDB key using the basic MovieLens catalog.
+A runnable FastAPI app with an in-memory, item-based collaborative filtering engine, TMDB movie and person details, and a responsive HTML/CSS/JavaScript frontend. No database or frontend build is needed. The app works without a TMDB key using the basic MovieLens catalog.
 
 ## GitHub Pages hosting
 
-The GitHub Pages edition runs entirely in the browser. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, recommendations, and linkable MovieLens-only detail pages then run in the browser. Pages cannot securely access a private TMDB API key or the FastAPI routes, so full cast, posters, trailers, TMDB ratings, and TMDB-based fallback recommendations are available when the FastAPI app runs with a key.
+The GitHub Pages edition runs entirely in the browser. GitHub Actions runs the Python recommendation engine at build time and exports the catalog plus the top 50 neighbors for every eligible movie. Search, fuzzy title suggestions, popular movies, recommendations, and linkable MovieLens-only detail pages then run in the browser. Pages cannot securely access a private TMDB API key or the FastAPI routes, so posters, summaries, person links and profiles, cast, trailers, TMDB ratings, and TMDB-based fallback recommendations are available when the FastAPI app runs with a key. The Pages cards retain their styled poster fallback.
 
 To enable publication, open this repository's **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**. The `Deploy GitHub Pages` workflow builds and publishes on pushes to `main`; it can also be run manually from Actions. The expected URL is `https://pjswalksonthemoon.github.io/movie-recommender/` after deployment succeeds.
 
@@ -49,7 +49,7 @@ Open http://127.0.0.1:8000. API documentation is at http://127.0.0.1:8000/docs. 
 
 On first startup, the app downloads the official MovieLens `ml-latest-small` archive and puts `movies.csv`, `ratings.csv`, and `links.csv` directly in `data/`. Startup waits for the download and model fitting; subsequent startups reuse the local files. Internet is required for dependency installation, the first data download, and TMDB requests. A failed download reports how to install the CSVs manually.
 
-To enable full details, copy `.env.example` to `.env` and add your TMDB API key:
+To enable posters, card summaries, and full movie and person details, copy `.env.example` to `.env` and add your TMDB API key:
 
 ```text
 TMDB_API_KEY=your_tmdb_api_key
@@ -80,9 +80,9 @@ Choose the Free plan, leave the root directory empty, and use `main`. Free servi
 
 ## Use the website
 
-Search for a movie, use arrow keys and Enter to select an autocomplete result, or click any movie card. The hash URL opens a linkable details page. Scroll down to see credits, cast, trailer, and similar movies; selecting a similar movie opens its details and browser Back returns to the previous movie. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings use TMDB's similar movie list when available.
+Search for a movie, use arrow keys and Enter to select an autocomplete result, or click any movie card. The hash URL opens a linkable details page. Scroll down to see credits, cast, trailer, and similar movies; selecting a similar movie opens its details and browser Back returns to the previous movie. With a TMDB key, cards show posters, short summaries, genres, rating, director, and three leading actors. Actor, director, and writer links open a person biography and up to 24 popular movie credits. MovieLens titles link back into Reelwise; other filmography titles open TMDB in a new tab. The home page has the twelve most-rated movies, and recommendations display up to ten neighbors. Unknown or ambiguous titles show selectable suggestions. Movies without enough eligible ratings use TMDB's similar movie list when available.
 
-Cards use TMDB posters when available and retain a CSS artwork fallback. Google Fonts enhances typography when available; system sans-serif fonts work offline.
+Cards use lazy-loaded TMDB posters when available and retain a CSS artwork fallback. The reserved 2:3 poster space prevents layout jumps. Google Fonts enhances typography when available; system sans-serif fonts work offline.
 
 ## How recommendations work
 
@@ -100,14 +100,15 @@ The model and sparse matrix are cached once per process. Neighbor queries run on
 
 | Endpoint | Response |
 | --- | --- |
-| `GET /api/search?q=toy` | Up to eight `{movie_id, title}` records, ranked by original rating count |
-| `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | List of `{movie_id, title, genres, score}` |
-| `GET /api/movies/popular` | Up to twelve `{movie_id, title, genres, rating_count}` records |
+| `GET /api/search?q=toy` | Up to eight enriched movie cards, ranked by original rating count |
+| `GET /api/recommend?title=Toy%20Story%20(1995)&n=10` | Enriched movie cards with a collaborative-filtering match `score` |
+| `GET /api/movies/popular` | Up to twelve enriched movie cards with `rating_count` |
 | `GET /api/movie/{movie_id}` | MovieLens basics combined with TMDB details, credits, trailer and certification |
-| `GET /api/movie/{movie_id}/similar?n=12` | Similar movie records with ids, year, genres, poster and score when available |
+| `GET /api/movie/{movie_id}/similar?n=12` | Enriched similar movie cards with match score when available |
+| `GET /api/person/{person_id}` | Biography, photo and up to 24 popular movie credits |
 | `GET /` | Frontend |
 
-`genres` in recommendation results is the MovieLens pipe-separated string; details and similar movie responses use genre arrays. Movie ids are MovieLens ids, mapped to TMDB through `links.csv`. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown ids and titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend builds content with text nodes, validates image URLs, and cancels stale requests.
+All list endpoints return the same card fields: `movie_id`, `title`, `year`, `genres`, `poster_url`, `summary`, `rating` (percentage), `director: {id, name}`, and `cast: [{id, name}]`; match `score` or `rating_count` appears where relevant. Up to eight card summaries are fetched concurrently and cached in memory for an hour. Individual TMDB failures fall back to MovieLens title, year, and genres. Movie ids are MovieLens ids, mapped to TMDB through `links.csv`. Filmography returns `movie_id: null` when a TMDB movie is absent from MovieLens. Search and recommendation titles must contain non-whitespace text and be no longer than 300 characters. Invalid parameters receive HTTP 422; unknown ids and titles receive 404. Title lookup errors have `{detail: {code, message, matches}}`. Other validation failures use FastAPI's standard validation response. Search treats query characters literally, not as regular expressions. The frontend builds content with text nodes, validates image URLs, and cancels stale requests.
 
 The footer shows the approved TMDB logo and attribution. It also includes TMDB's required notice: “This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.” Review the [TMDB attribution guidance](https://developer.themoviedb.org/docs/faq) before using this project commercially.
 
@@ -117,7 +118,7 @@ The footer shows the approved TMDB logo and attribution. It also includes TMDB's
 python -m pytest -q
 ```
 
-Tests create small synthetic CSVs and mock TMDB responses, so they run offline and do not depend on live services. They check nearest neighbors, MovieLens-to-TMDB details mapping, missing fields, API failures, missing-key behavior, TTL caching, fallback recommendations, validation, and frontend static export behavior.
+Tests create small synthetic CSVs and mock TMDB responses, so they run offline and do not depend on live services. They check nearest neighbors, MovieLens-to-TMDB details mapping, card summary truncation and caching, person filmography, missing fields, API failures, missing-key behavior, fallback recommendations, validation, and frontend static export behavior.
 
 ## Project layout
 
@@ -133,16 +134,21 @@ movie-recommender/
       index.html
       style.css
       script.js
+      static-api.js
+    build_static.py
   .env.example
   data/
-  tests/test_recommender.py
+  tests/
+    test_recommender.py
+    test_movie_details.py
+    static-api.test.cjs
   requirements.txt
   README.md
 ```
 
 ## Data and limitations
 
-Data: [GroupLens MovieLens](https://grouplens.org/datasets/movielens/latest/) and its [dataset README and license terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html). The small dataset is historical, so recent releases are generally absent. Respect the dataset's usage and redistribution terms. The downloader keeps only the two required CSVs; consult the linked README for attribution and usage conditions. `ml-latest-small` is a mutable release, so later downloads can differ.
+Data: [GroupLens MovieLens](https://grouplens.org/datasets/movielens/latest/) and its [dataset README and license terms](https://files.grouplens.org/datasets/movielens/ml-latest-small-README.html). The small dataset is historical, so recent releases are generally absent. Respect the dataset's usage and redistribution terms. The downloader keeps `movies.csv`, `ratings.csv`, and `links.csv`; consult the linked README for attribution and usage conditions. `ml-latest-small` is a mutable release, so later downloads can differ.
 
 Raw cosine similarity can favor widely rated movies. Missing ratings are treated as zeros, and this version does not normalize individual rating habits or measure shared-rater confidence. It recommends from one selected movie; a multi-rating user profile is a future extension. Development `--reload` is for local use; production should use a supervised process and appropriate HTTPS deployment.
 
@@ -155,4 +161,3 @@ Raw cosine similarity can favor widely rated movies. Missing ratings are treated
 - Prewarm the TMDB cache for the most popular titles when a Python service starts.
 - Add request throttling and a shared cache if the API is exposed to higher traffic.
 - For larger datasets, construct sparse matrices directly and precompute top-k neighbors.
-

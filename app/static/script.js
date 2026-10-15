@@ -6,6 +6,7 @@ const collection = document.querySelector('.collection');
 const choices = document.querySelector('#choices');
 const homeView = document.querySelector('#home-view');
 const detailView = document.querySelector('#detail-view');
+const personView = document.querySelector('#person-view');
 const trailerDialog = document.querySelector('#trailer-dialog');
 const trailerFrame = trailerDialog.querySelector('.trailer-frame');
 const safeImage = value => typeof value === 'string' && /^https:\/\/image\.tmdb\.org\/t\/p\/(w\d+|original)\/[\w./-]+$/.test(value) ? value : null;
@@ -54,35 +55,69 @@ function navigateToMovie(movieId) {
   history.pushState({ reelwise: true }, '', `#/movie/${Number(movieId)}`);
   route();
 }
+function navigateToPerson(personId) {
+  if (!Number.isInteger(Number(personId)) || Number(personId) < 1) return;
+  cancelSearch();
+  history.pushState({ reelwise: true }, '', `#/person/${Number(personId)}`);
+  route();
+}
+function personLink(person) {
+  const link = element('a', 'person-link', person.name);
+  link.href = `#/person/${person.id}`;
+  link.addEventListener('click', event => { event.stopPropagation(); event.preventDefault(); navigateToPerson(person.id); });
+  return link;
+}
+function makeMovieCard(movie, compact = false) {
+  const title = String(movie.title || 'Untitled movie').replace(/\s*\(\d{4}\)\s*$/, '');
+  const card = element('article', compact ? 'card movie-card compact-card' : 'card movie-card');
+  card.tabIndex = 0; card.setAttribute('role', 'link'); card.setAttribute('aria-label', `View details for ${movie.title}`);
+  const art = element('div', 'art card-art skeleton');
+  const poster = safeImage(movie.poster_url || movie.poster);
+  if (poster) {
+    const image = element('img', 'card-poster');
+    image.src = poster; image.alt = `Poster for ${movie.title}`; image.loading = 'lazy';
+    image.addEventListener('load', () => art.classList.remove('skeleton'));
+    image.addEventListener('error', () => { image.remove(); art.classList.remove('skeleton'); art.append(makePosterPlaceholder(title)); });
+    art.append(image);
+  } else { art.classList.remove('skeleton'); art.append(makePosterPlaceholder(title)); }
+  const body = element('div', 'card-body');
+  const heading = element('h3', 'card-title', title);
+  const meta = element('div', 'card-meta', movieYear(movie));
+  if (Number.isFinite(movie.rating)) meta.append(element('span', 'card-rating', `${movie.rating}% rated`));
+  if (Number.isFinite(movie.score)) meta.append(element('span', 'match', `${Math.round(movie.score * 100)}% match`));
+  body.append(heading, meta);
+  const tags = element('div', 'tags');
+  movieGenres(movie).slice(0, 2).forEach(genre => tags.append(element('span', 'tag', genre)));
+  body.append(tags);
+  if (movie.summary) body.append(element('p', 'card-summary', movie.summary));
+  if (movie.director?.id) {
+    const line = element('p', 'card-people'); line.append(document.createTextNode('Directed by '), personLink(movie.director)); body.append(line);
+  }
+  if (movie.cast?.length) {
+    const line = element('p', 'card-people'); line.append(document.createTextNode('Starring '));
+    movie.cast.slice(0, 3).forEach((person, index) => {
+      if (index) line.append(document.createTextNode(', '));
+      if (person.id) line.append(personLink(person)); else line.append(document.createTextNode(person.name || 'Unknown'));
+    });
+    body.append(line);
+  }
+  card.append(art, body);
+  const open = () => movie.movie_id || movie.id ? navigateToMovie(movie.movie_id || movie.id) : load(movie.title);
+  card.addEventListener('click', open);
+  card.addEventListener('keydown', event => {
+    if (event.target !== card || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault(); open();
+  });
+  return card;
+}
+function makePosterPlaceholder(title) {
+  const placeholder = element('div', 'card-placeholder');
+  placeholder.append(element('span', 'film-icon', '▣'), element('span', '', title));
+  return placeholder;
+}
 function renderCards(movies) {
   grid.replaceChildren();
-  for (const movie of movies) {
-    const year = movieYear(movie);
-    const title = movie.title.replace(/\s*\(\d{4}\)\s*$/, '');
-    const card = element('button', 'card'); card.type = 'button';
-    card.setAttribute('aria-label', `View details for ${movie.title}`);
-    const art = element('div', 'art');
-    const poster = safeImage(movie.poster);
-    if (poster) {
-      art.classList.add('art-poster');
-      const image = element('img', 'card-poster'); image.src = poster; image.alt = `Poster for ${movie.title}`; image.loading = 'lazy'; art.append(image);
-    } else {
-      art.setAttribute('aria-hidden', 'true');
-      const hue = [...title].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 360;
-      art.style.setProperty('--hue', hue);
-      art.append(element('span', 'art-label', 'REELWISE / CINEMA'), element('span', 'art-title', title), element('span', 'art-bottom', `${year}   •   DISCOVER ↗`));
-    }
-    const metadata = element('div', 'year'); metadata.append(element('span', '', year));
-    if (typeof movie.score === 'number') {
-      const match = element('span', 'match', `${Math.round(movie.score * 100)}% match`);
-      match.title = 'Cosine similarity of audience ratings, not a prediction of your rating'; metadata.append(match);
-    } else if (Number.isFinite(movie.rating_count)) metadata.append(element('span', '', `${movie.rating_count} ratings`));
-    const tags = element('div', 'tags');
-    movieGenres(movie).slice(0, 3).forEach(genre => tags.append(element('span', 'tag', genre)));
-    card.append(art, element('h3', '', title), metadata, tags);
-    card.addEventListener('click', () => movie.movie_id ? navigateToMovie(movie.movie_id) : load(movie.title));
-    grid.append(card);
-  }
+  for (const movie of movies) grid.append(makeMovieCard(movie));
 }
 async function load(title = '') {
   cancelSearch(); pageController?.abort();
@@ -114,6 +149,18 @@ function addTextRow(parent, label, value) {
   const row = element('div', 'fact'); row.append(element('span', 'fact-label', label));
   row.append(element('span', 'fact-value', Array.isArray(value) ? value.join(', ') : String(value)));
   parent.append(row);
+}
+function addPeopleRow(parent, label, people) {
+  if (!Array.isArray(people) || !people.length) return;
+  const row = element('div', 'fact'); row.append(element('span', 'fact-label', label));
+  const names = element('span', 'fact-value');
+  people.forEach((person, index) => {
+    if (index) names.append(document.createTextNode(', '));
+    if (typeof person === 'string') names.append(document.createTextNode(person));
+    else if (person?.id) names.append(personLink(person));
+    else names.append(document.createTextNode(person?.name || 'Unknown'));
+  });
+  row.append(names); parent.append(row);
 }
 function makeDetailSkeleton() {
   detailView.replaceChildren();
@@ -176,7 +223,7 @@ function renderDetails(movie, movieId) {
   overview.append(element('p', 'overview-copy', movie.overview || 'No overview is available for this movie.')); body.append(overview);
   const facts = element('section', 'detail-section'); facts.append(element('p', 'eyebrow', 'AT A GLANCE'), element('h2', '', 'Key facts'));
   const factGrid = element('div', 'facts-grid');
-  addTextRow(factGrid, 'Director', movie.directors); addTextRow(factGrid, 'Writers', movie.writers);
+  addPeopleRow(factGrid, 'Director', movie.directors); addPeopleRow(factGrid, 'Writers', movie.writers);
   addTextRow(factGrid, 'Release date', movie.release_date); addTextRow(factGrid, 'Original language', movie.original_language?.toUpperCase());
   if (factGrid.childElementCount) { facts.append(factGrid); body.append(facts); }
   if (movie.cast?.length) {
@@ -186,7 +233,9 @@ function renderDetails(movie, movieId) {
       const castCard = element('article', 'cast-card'); const photo = safeImage(person.profile);
       if (photo) { const image = element('img', 'cast-photo'); image.src = photo; image.alt = `Photo of ${person.name}`; image.loading = 'lazy'; castCard.append(image); }
       else castCard.append(element('div', 'cast-placeholder', (person.name || '?').slice(0, 1).toUpperCase()));
-      castCard.append(element('h3', '', person.name || 'Unknown'), element('p', '', person.character || ''));
+      const name = element('h3');
+      name.append(person.id ? personLink(person) : document.createTextNode(person.name || 'Unknown'));
+      castCard.append(name, element('p', '', person.character || ''));
       castRow.append(castCard);
     }
     castSection.append(castRow); body.append(castSection);
@@ -215,17 +264,7 @@ async function loadSimilar(movieId, target, state) {
     if (!target.isConnected) return;
     state.replaceChildren();
     if (!movies.length) { state.append(element('p', 'empty-similar', 'No similar movies are available yet.')); return; }
-    for (const movie of movies) {
-      const card = element('button', 'card'); card.type = 'button'; card.setAttribute('aria-label', `View details for ${movie.title}`);
-      const poster = safeImage(movie.poster); const art = element('div', 'art');
-      if (poster) { art.classList.add('art-poster'); const image = element('img', 'card-poster'); image.src = poster; image.alt = `Poster for ${movie.title}`; image.loading = 'lazy'; art.append(image); }
-      else { const hue = [...movie.title].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 360; art.style.setProperty('--hue', hue); art.setAttribute('aria-hidden', 'true'); art.append(element('span', 'art-label', 'REELWISE / CINEMA'), element('span', 'art-title', movie.title.replace(/\s*\(\d{4}\)\s*$/, '')), element('span', 'art-bottom', `${movieYear(movie)}   •   DISCOVER ↗`)); }
-      const metadata = element('div', 'year'); metadata.append(element('span', '', movieYear(movie)));
-      if (typeof movie.score === 'number') metadata.append(element('span', 'match', `${Math.round(movie.score * 100)}% match`));
-      const tags = element('div', 'tags'); movieGenres(movie).slice(0, 3).forEach(genre => tags.append(element('span', 'tag', genre)));
-      card.append(art, element('h3', '', movie.title.replace(/\s*\(\d{4}\)\s*$/, '')), metadata, tags);
-      card.addEventListener('click', () => navigateToMovie(movie.movie_id || movie.id)); target.append(card);
-    }
+    for (const movie of movies) target.append(makeMovieCard(movie));
   } catch (error) {
     if (error.name === 'AbortError' || !target.isConnected) return;
     state.replaceChildren(element('span', 'similar-error', 'Similar movies could not be loaded.'), Object.assign(element('button', 'text-button', 'Retry'), { onclick: () => loadSimilar(movieId, target, state) }));
@@ -234,7 +273,7 @@ async function loadSimilar(movieId, target, state) {
 async function showMovie(movieId) {
   cancelSearch(); pageController?.abort();
   const controller = new AbortController(); pageController = controller;
-  homeView.hidden = true; detailView.hidden = false; detailView.classList.remove('page-enter');
+  homeView.hidden = true; personView.hidden = true; detailView.hidden = false; detailView.classList.remove('page-enter');
   makeDetailSkeleton(); window.scrollTo({ top: 0, behavior: 'instant' });
   try {
     const movie = await request(`/api/movie/${movieId}`, controller.signal);
@@ -245,6 +284,91 @@ async function showMovie(movieId) {
     renderError(error, Number(movieId));
   }
 }
+function makePersonSkeleton() {
+  personView.replaceChildren();
+  const skeleton = element('section', 'person-skeleton');
+  skeleton.setAttribute('aria-label', 'Loading person details'); skeleton.setAttribute('aria-busy', 'true');
+  skeleton.append(element('div', 'skeleton person-skeleton-photo'), element('div', 'skeleton-copy'));
+  for (let i = 0; i < 5; i++) skeleton.lastChild.append(element('span', 'skeleton skeleton-line'));
+  personView.append(skeleton);
+}
+function renderPersonError(error, personId) {
+  personView.replaceChildren();
+  const panel = element('section', 'detail-error');
+  panel.append(element('h1', '', 'We couldn’t load this person'), element('p', '', error.message || 'Please try again.'));
+  const retry = element('button', 'search-submit', 'Try again');
+  retry.addEventListener('click', () => showPerson(personId)); panel.append(retry); personView.append(panel);
+}
+function makeFilmCredit(movie) {
+  const card = element('article', 'film-card');
+  const destination = movie.movie_id ? `#/movie/${movie.movie_id}` : `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
+  const link = element('a', 'film-link'); link.href = destination;
+  if (!movie.movie_id) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+  else link.addEventListener('click', event => { event.preventDefault(); navigateToMovie(movie.movie_id); });
+  const art = element('div', 'art card-art skeleton');
+  const poster = safeImage(movie.poster_url);
+  if (poster) {
+    const image = element('img', 'card-poster'); image.src = poster; image.alt = `Poster for ${movie.title}`; image.loading = 'lazy';
+    image.addEventListener('load', () => art.classList.remove('skeleton'));
+    image.addEventListener('error', () => { image.remove(); art.classList.remove('skeleton'); art.append(makePosterPlaceholder(movie.title)); });
+    art.append(image);
+  } else { art.classList.remove('skeleton'); art.append(makePosterPlaceholder(movie.title)); }
+  link.append(art, element('h3', '', movie.title || 'Untitled movie'), element('p', 'film-meta', [movie.year, movie.role].filter(Boolean).join(' · ')));
+  card.append(link); return card;
+}
+function renderPerson(person) {
+  personView.replaceChildren(); document.title = `${person.name} — Reelwise`;
+  const wrapper = element('article', 'person-page page-enter');
+  const back = element('button', 'back-button', '← Back'); back.type = 'button';
+  back.addEventListener('click', () => history.state?.reelwise ? history.back() : goHome());
+  wrapper.append(back);
+  const header = element('section', 'person-header');
+  const photo = safeImage(person.photo_url);
+  if (photo) {
+    const image = element('img', 'person-photo'); image.src = photo; image.alt = `Photo of ${person.name}`; header.append(image);
+  } else header.append(element('div', 'person-photo person-photo-placeholder', (person.name || '?').slice(0, 1)));
+  const info = element('div');
+  info.append(element('p', 'eyebrow', 'THE PEOPLE BEHIND THE MOVIES'));
+  const title = element('h1', '', person.name); title.tabIndex = -1; info.append(title);
+  if (person.known_for_department) info.append(element('p', 'person-department', person.known_for_department));
+  if (person.birthday) info.append(element('p', 'person-fact', `Born ${person.birthday}`));
+  if (person.place_of_birth) info.append(element('p', 'person-fact', person.place_of_birth));
+  header.append(info); wrapper.append(header);
+  const bio = element('section', 'detail-section'); bio.append(element('p', 'eyebrow', 'BIOGRAPHY'), element('h2', '', 'About'));
+  const copy = element('p', 'overview-copy bio-collapsed', person.biography || 'No biography is available yet.');
+  bio.append(copy);
+  if (person.biography) {
+    const toggle = element('button', 'text-button bio-toggle', 'Read more');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', () => {
+      const expanded = copy.classList.toggle('bio-expanded');
+      toggle.textContent = expanded ? 'Read less' : 'Read more'; toggle.setAttribute('aria-expanded', String(expanded));
+    });
+    bio.append(toggle);
+  }
+  wrapper.append(bio);
+  const films = element('section', 'detail-section');
+  films.append(element('p', 'eyebrow', 'ON SCREEN AND BEHIND THE CAMERA'), element('h2', '', 'Known for'));
+  const filmGrid = element('div', 'grid person-grid');
+  for (const movie of person.filmography || []) filmGrid.append(makeFilmCredit(movie));
+  if (!filmGrid.childElementCount) films.append(element('p', 'overview-copy', 'No movie credits are available yet.'));
+  else films.append(filmGrid);
+  wrapper.append(films); personView.append(wrapper); title.focus({ preventScroll: true });
+}
+async function showPerson(personId) {
+  cancelSearch(); pageController?.abort();
+  const controller = new AbortController(); pageController = controller;
+  homeView.hidden = true; detailView.hidden = true; personView.hidden = false;
+  makePersonSkeleton(); window.scrollTo({ top: 0, behavior: 'instant' });
+  try {
+    const person = await request(`/api/person/${personId}`, controller.signal);
+    if (controller !== pageController) return;
+    renderPerson(person);
+  } catch (error) {
+    if (error.name === 'AbortError' || controller !== pageController) return;
+    renderPersonError(error, personId);
+  }
+}
 function goHome() {
   if (location.hash === '#/' || !location.hash) { route(); return; }
   history.pushState({ reelwise: true }, '', '#/'); route();
@@ -252,8 +376,9 @@ function goHome() {
 function route() {
   const match = location.hash.match(/^#\/movie\/(\d+)\/?$/);
   if (match) showMovie(Number(match[1]));
+  else if (location.hash.match(/^#\/person\/(\d+)\/?$/)) showPerson(Number(location.hash.match(/^#\/person\/(\d+)\/?$/)[1]));
   else {
-    pageController?.abort(); detailView.hidden = true; homeView.hidden = false;
+    pageController?.abort(); detailView.hidden = true; personView.hidden = true; homeView.hidden = false;
     document.title = 'Reelwise — Your next great watch';
     window.scrollTo({ top: 0, behavior: 'instant' });
     if (!homeLoaded) { homeLoaded = true; load(); }
@@ -270,10 +395,9 @@ input.addEventListener('input', () => {
       if (version !== searchVersion) return;
       suggestions.replaceChildren(); active = -1;
       titles.forEach((movie, i) => {
-        const option = element('li', '', movie.title); option.id = `suggestion-${i}`;
+        const option = element('li', 'search-option'); option.id = `suggestion-${i}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false');
-        option.addEventListener('mousedown', e => e.preventDefault());
-        option.addEventListener('click', () => navigateToMovie(movie.movie_id)); suggestions.append(option);
+        option.append(makeMovieCard(movie, true)); suggestions.append(option);
       });
       if (!titles.length) {
         const empty = element('li', '', 'No exact matches. Press Enter to find similar titles.');
@@ -297,7 +421,9 @@ input.addEventListener('keydown', event => {
     input.setAttribute('aria-activedescendant', `suggestion-${active}`); suggestions.children[active].scrollIntoView({ block: 'nearest' });
   } else if (event.key === 'Enter' && active >= 0) { event.preventDefault(); navigateToMovie(titles[active].movie_id); }
 });
-input.addEventListener('blur', closeSuggestions);
+input.addEventListener('blur', () => setTimeout(() => {
+  if (!suggestions.contains(document.activeElement)) closeSuggestions();
+}, 150));
 document.querySelector('#search-form').addEventListener('submit', event => {
   event.preventDefault(); const query = input.value.trim();
   const match = titles.find(movie => movie.title.toLocaleLowerCase() === query.toLocaleLowerCase()) || (titles.length === 1 ? titles[0] : null);
@@ -306,4 +432,3 @@ document.querySelector('#search-form').addEventListener('submit', event => {
 document.querySelector('#reset').addEventListener('click', () => load());
 window.addEventListener('hashchange', route);
 route();
-

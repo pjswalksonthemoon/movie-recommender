@@ -15,6 +15,12 @@
     if (!recommendationsPromise) recommendationsPromise = readJSON('recommendations.json').catch(error => { recommendationsPromise = null; throw error; });
     return recommendationsPromise;
   }
+  function card(movie, extra = {}) {
+    return {movie_id: movie.movieId, title: movie.title,
+      year: movie.title.match(/\((\d{4})\)\s*$/)?.[1] || null,
+      genres: movie.genres.split('|').filter(Boolean),
+      poster_url: null, summary: '', rating: null, director: null, cast: [], ...extra};
+  }
   function lookupError(message, matches = []) {
     const error = new Error(message); error.matches = matches; return error;
   }
@@ -35,7 +41,8 @@
     const route = new URL(url, document.baseURI);
     const movies = await catalog();
     signal?.throwIfAborted();
-    if (route.pathname === '/api/movies/popular') return movies.slice(0, 12).map(movie => ({...movie, movie_id: movie.movieId}));
+    if (route.pathname === '/api/movies/popular') return movies.slice(0, 12).map(movie => card(movie, {rating_count: movie.rating_count}));
+    if (/^\/api\/person\/\d+$/.test(route.pathname)) throw lookupError('Person profiles require the Python app with a TMDB key.');
     const detailMatch = route.pathname.match(/^\/api\/movie\/(\d+)(?:\/(similar))?$/);
     if (detailMatch) {
       const movieId = Number(detailMatch[1]);
@@ -46,8 +53,7 @@
         const byId = new Map(movies.map(movie => [movie.movieId, movie]));
         return ranked.slice(0, Number(route.searchParams.get('n') || 12)).map(([id, score]) => {
           const movie = byId.get(id);
-          return {id, movie_id: id, title: movie.title, year: movie.title.match(/\((\d{4})\)\s*$/)?.[1] || null,
-            genres: movie.genres.split('|').filter(Boolean), poster: null, score};
+          return card(movie, {id, score});
         });
       }
       const year = selected.title.match(/\((\d{4})\)\s*$/)?.[1] || null;
@@ -60,7 +66,7 @@
     const query = normalize(route.searchParams.get(route.pathname === '/api/search' ? 'q' : 'title') || '');
     if (!query || query.length > 300) throw lookupError('Enter a movie title between 1 and 300 characters.');
     const matches = movies.filter(movie => normalize(movie.title).includes(query));
-    if (route.pathname === '/api/search') return matches.slice(0, 8).map(movie => ({movie_id: movie.movieId, title: movie.title}));
+    if (route.pathname === '/api/search') return matches.slice(0, 8).map(movie => card(movie));
     if (route.pathname !== '/api/recommend') throw lookupError('Unknown request.');
     const n = Number(route.searchParams.get('n') ?? 10);
     if (!Number.isInteger(n) || n < 1 || n > 50) throw lookupError('Choose between 1 and 50 recommendations.');
@@ -78,7 +84,6 @@
     signal?.throwIfAborted();
     if (!neighbors) throw lookupError('This movie has too few eligible ratings. Try a more popular movie.');
     const byId = new Map(movies.map(movie => [movie.movieId, movie]));
-    return neighbors.slice(0, n).map(([id, score]) => ({movie_id: id, title: byId.get(id).title, genres: byId.get(id).genres.split('|').filter(Boolean), score}));
+    return neighbors.slice(0, n).map(([id, score]) => card(byId.get(id), {score}));
   };
 })();
-

@@ -8,3 +8,74 @@
 .tmdb-credit img{width:54px;height:25px;object-fit:contain}.tmdb-disclaimer{width:100%;font-size:9px;line-height:1.5;color:#788071;margin:-12px 0 13px auto;text-align:right}
 @media(max-width:760px){.tmdb-disclaimer{margin:0;text-align:left}}
 
+/* Shared enriched movie cards. Poster height is reserved before the image loads. */
+.grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}
+.movie-card{background:#1a1e19;border:1px solid #30372c;border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s}
+.movie-card:hover{transform:translateY(-5px);border-color:#8fa561;box-shadow:0 15px 30px #0004}
+.movie-card:focus-visible,.film-link:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+.card-art,.detail-grid .card-art{height:auto;aspect-ratio:2/3;border:0;border-radius:0;padding:0;background:#292f26;display:block}
+.card-art.skeleton{background:linear-gradient(100deg,#1b1e1b 25%,#384133 40%,#1b1e1b 65%);background-size:300% 100%;animation:shimmer 1.5s infinite}
+.card-art:before{display:none}
+.card-poster{width:100%;height:100%;object-fit:cover;display:block}
+.card-placeholder{height:100%;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;background:linear-gradient(150deg,#3d4835,#1c211b);color:#e6edd7;font:600 18px 'Space Grotesk',sans-serif;overflow-wrap:anywhere}
+.film-icon{color:var(--lime);font-size:32px}
+.card-body{padding:15px}
+.movie-card h3.card-title{font-size:17px;font-weight:600;margin:0 0 7px;line-height:1.25}
+.card-meta{display:flex;gap:9px;flex-wrap:wrap;color:var(--muted);font-size:11px}
+.card-rating{color:#dcecae;border:1px solid #7e9350;background:#303c22;border-radius:99px;padding:2px 6px;font-weight:700}.card-summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;min-height:4.2em;color:#c7cec0;font-size:12px;line-height:1.4;margin:12px 0}
+.card-people{font-size:11px;line-height:1.5;color:#aab3a3;margin:7px 0 0}
+.person-link{color:#d6f578;text-decoration:underline;text-decoration-color:#a0b95b70;text-underline-offset:2px}
+.person-link:hover{color:#fff}
+.person-link:focus-visible{outline:2px solid var(--lime);outline-offset:3px;border-radius:2px}
+.movie-card .tags{margin:9px 0 0}.movie-card .tag{border-radius:99px;padding:4px 8px}
+.detail-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.detail-grid .art{height:auto}
+.cast-card .person-link{display:inline-block}
+#suggestions{max-height:540px;padding:6px}
+#suggestions li.search-option{padding:4px;background:transparent;color:inherit}
+#suggestions .movie-card{display:grid;grid-template-columns:80px 1fr;max-width:none}
+#suggestions .card-art{height:120px;aspect-ratio:2/3}
+#suggestions .card-body{padding:9px 12px}
+#suggestions .card-summary{min-height:0;margin:6px 0;-webkit-line-clamp:2;line-clamp:2}
+#suggestions .card-title{font-size:14px}
+#suggestions .card-people{margin:3px 0;font-size:10px}
+#suggestions .tags{margin:5px 0}
+#suggestions li[aria-selected=true] .movie-card{border-color:var(--lime)}
+.person-page{max-width:1320px;margin:auto;padding:35px 48px 70px}
+.person-header{display:grid;grid-template-columns:230px 1fr;gap:40px;align-items:center;padding:25px 0 45px;border-bottom:1px solid var(--line)}
+.person-photo{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:10px;background:#30392b}
+.person-photo-placeholder{display:grid;place-items:center;color:var(--lime);font:600 70px 'Space Grotesk',sans-serif}
+.person-header h1{margin:15px 0 8px}.person-department{font-size:16px;color:var(--lime)}.person-fact{font-size:13px;color:var(--muted);margin:8px 0}
+.bio-collapsed{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;line-clamp:5;overflow:hidden;white-space:pre-line}
+.bio-expanded{display:block;-webkit-line-clamp:unset;line-clamp:unset}
+.bio-toggle{margin-top:12px}.person-grid{margin-top:22px}
+.film-card{min-width:0;background:#1a1e19;border:1px solid #30372c;border-radius:9px;overflow:hidden;transition:transform .2s}
+.film-card:hover{transform:translateY(-4px)}.film-link{display:block;height:100%}
+.film-card h3{font-size:15px;margin:12px 12px 4px;line-height:1.3}
+.film-meta{font-size:11px;color:var(--muted);margin:0 12px 14px;line-height:1.5}
+.person-skeleton{max-width:900px;margin:40px auto;padding:30px;display:grid;grid-template-columns:210px 1fr;gap:35px}
+.person-skeleton-photo{aspect-ratio:2/3}
+@media(max-width:760px){
+  .grid,.detail-grid,.person-grid{grid-template-columns:1fr;gap:12px}
+  .movie-card{display:grid;grid-template-columns:112px 1fr;min-height:168px}
+  .movie-card .card-art,.detail-grid .movie-card .card-art{height:auto;aspect-ratio:2/3;align-self:start}
+  .movie-card .card-body{padding:11px 13px;min-width:0}
+  .movie-card h3.card-title{font-size:15px}
+  .movie-card .card-summary{font-size:11px;margin:7px 0;min-height:0;-webkit-line-clamp:2;line-clamp:2}
+  .movie-card .card-people{font-size:10px;margin-top:3px}
+  .person-page{padding:24px 22px 50px}
+  .person-header{grid-template-columns:120px 1fr;gap:20px;padding-bottom:28px}
+  .person-header h1{font-size:32px;letter-spacing:-1px}
+  .person-skeleton{grid-template-columns:120px 1fr;gap:20px;padding:22px}
+  .film-card{display:block}.film-link{display:grid;grid-template-columns:95px 1fr;align-items:start}
+  .film-card .card-art{grid-row:span 2;height:143px;aspect-ratio:2/3}
+  .film-card h3{margin:15px 12px 3px}.film-meta{margin:0 12px}
+}
+@media(max-width:480px){
+  .person-header{grid-template-columns:95px 1fr;gap:14px}
+  .person-header h1{font-size:26px}.person-fact,.person-department{font-size:11px}
+  .movie-card{grid-template-columns:95px 1fr}.movie-card .card-body{padding:9px}
+  .movie-card h3.card-title{font-size:13px}.movie-card .tags{margin-top:5px}
+  #suggestions .movie-card{grid-template-columns:70px 1fr}
+  #suggestions .card-art{height:105px}
+}
