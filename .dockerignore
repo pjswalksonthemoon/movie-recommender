@@ -1,0 +1,17 @@
+.git/
+.venv/
+.tmp/
+.testdeps/
+.pip-cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+data/*.csv
+data/*.zip
+dist/
+work/
+*.db
+*.sqlite3
