@@ -47,6 +47,7 @@ test('movie detail route and similar movies work without a server', async () => 
   const movie = await request('/api/movie/1');
   assert.equal(movie.title, 'Toy Story (1995)');
   assert.equal(movie.limited, true);
+  assert.match(movie.notice, /Python app with TMDB_API_KEY/);
   const similar = await request('/api/movie/1/similar?n=3');
   assert.equal(similar.length, 3);
   assert(similar.every(item => Number.isInteger(item.movie_id) && Array.isArray(item.genres)));

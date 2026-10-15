@@ -54,7 +54,8 @@
       return {movie_id: movieId, title: selected.title, year, tagline: '', overview: '', release_date: null,
         runtime: null, original_language: null, genres: selected.genres.split('|').filter(Boolean), vote_average: null,
         vote_count: 0, poster: null, backdrop: null, directors: [], writers: [], certification: null, cast: [],
-        trailer_key: null, limited: true};
+        trailer_key: null, limited: true,
+        notice: 'The GitHub Pages edition provides MovieLens titles and genres. Full TMDB details require the Python app with TMDB_API_KEY configured.'};
     }
     const query = normalize(route.searchParams.get(route.pathname === '/api/search' ? 'q' : 'title') || '');
     if (!query || query.length > 300) throw lookupError('Enter a movie title between 1 and 300 characters.');
