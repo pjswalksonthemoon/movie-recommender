@@ -1,4 +1,4 @@
-# Wachl · good movies bring people together
+# Wachl · good movies bring people together(VibeCoded)
 
 A runnable FastAPI media-discovery app with MovieLens collaborative filtering, live TMDB movie and TV listings, AniList anime, personal accounts and saved watchlists. The frontend is plain HTML/CSS/JavaScript with no build step. TMDB listings require a server-side key; AniList and the basic MovieLens catalogue do not. The Wachl name, olive-and-cream palette, and "Good movies bring people together" slogan come from the supplied logo artwork in `app/static/wachl-logo.png`.
 
