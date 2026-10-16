@@ -141,6 +141,20 @@ def test_auth_and_watchlists(client):
     assert len(client.get('/api/watchlists').json()) == 2
 
 
+def test_auth_origin_behind_https_proxy(client):
+    headers = {
+        'X-Reelwise-Request': '1', 'Origin': 'https://watch.example',
+        'Host': 'watch.example', 'X-Forwarded-Proto': 'https',
+    }
+    created = client.post('/api/auth/register', headers=headers,
+                          json={'email': 'proxy@example.com', 'username': 'proxyuser', 'password': 'password123'})
+    assert created.status_code == 201
+    assert 'secure' in created.headers['set-cookie'].lower()
+    rejected = client.post('/api/auth/login', headers={**headers, 'Origin': 'https://attacker.example'},
+                           json={'email': 'proxy@example.com', 'password': 'password123'})
+    assert rejected.status_code == 403
+
+
 def test_rate_limit_and_ownership(client):
     for _ in range(5):
         assert client.post('/api/auth/login', headers={'X-Reelwise-Request': '1'}, json={'email': 'missing@example.com', 'password': 'wrong'}).status_code == 401

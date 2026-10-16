@@ -151,6 +151,7 @@ async function load(title = '') {
   document.querySelector('#collection-note').hidden = Boolean(title);
   document.querySelector('#reset').hidden = !title;
   showStatus(title ? 'Finding your next great watch…' : 'Bringing in the crowd favorites…', true);
+  if (title) collection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   try {
     const movies = await request(title ? `/api/recommend?title=${encodeURIComponent(title)}&n=10` : '/api/movies/popular', controller.signal);
     if (controller !== pageController) return;

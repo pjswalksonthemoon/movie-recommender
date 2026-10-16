@@ -25,7 +25,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 #account-nav .text-button { color: var(--olive); }
 #account-nav .search-submit { background: var(--olive); color: #fff; }
 
-.hero { padding: 88px 300px 70px 0; min-height: 555px; }
+.hero { padding: 56px 300px 36px 0; min-height: 0; }
 .hero h1 { color: var(--olive); font-size: clamp(44px, 4.6vw, 65px); letter-spacing: -.06em; }
 .hero h1 em { color: var(--lime); }
 .hero p { color: #52643c; max-width: 650px; }
@@ -61,6 +61,7 @@ input::placeholder { color: #7e8c6c; }
 .person-link:hover, .text-button:hover { color: #334f00; }
 .match, .film-icon, .person-department { color: var(--olive); }
 .collection, .browse-section, .discovery-home, .explanation, footer { border-color: var(--line); }
+.collection { padding-top: 30px; border-bottom: 1px solid var(--line); }
 .explanation-icon { color: var(--lime); }
 .explanation p, .explanation h3 { color: var(--text); }
 footer .brand { color: var(--olive); }
@@ -105,9 +106,9 @@ footer .brand { color: var(--olive); }
 @media (max-width: 760px) {
   .header { min-height: 76px; }
   .brand-mark { width: 36px; height: 36px; }
-  .hero { padding: 45px 0 44px; min-height: 0; }
+  .hero { padding: 35px 0 26px; min-height: 0; }
   .hero h1 { font-size: clamp(38px, 8vw, 52px); }
-  .hero-logo { display: block; position: static; width: 190px; margin: 24px auto 0; }
+  .hero-logo { display: none; }
   .detail-hero:after { background: linear-gradient(90deg,#26371dee,#26371dd4),linear-gradient(0deg,#26371d 0%,transparent 65%); }
 }
 @media (max-width: 480px) {

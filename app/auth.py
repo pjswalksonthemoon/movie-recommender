@@ -80,7 +80,12 @@ def require_action_header(request: Request) -> None:
     if request.headers.get("x-reelwise-request") != "1":
         raise HTTPException(status_code=403, detail="Request confirmation header is missing.")
     origin = request.headers.get("origin")
-    if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+    # Railway terminates HTTPS before forwarding to Uvicorn. Compare the public
+    # origin with the forwarded scheme and Host instead of the internal URL.
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",", 1)[0].strip()
+    host = request.headers.get("host", "")
+    expected_origin = f"{scheme}://{host}"
+    if origin and origin.rstrip("/") != expected_origin:
         raise HTTPException(status_code=403, detail="Cross-origin request rejected.")
 
 
@@ -118,8 +123,9 @@ def _issue(user: User, db: Session, response: Response, request: Request) -> dic
     db.add(LoginSession(token_hash=_token_hash(token), user_id=user.id, csrf_token=csrf_token,
                         expires_at=utcnow() + timedelta(seconds=SESSION_AGE)))
     db.commit()
+    public_scheme = request.headers.get("x-forwarded-proto", request.url.scheme).split(",", 1)[0].strip()
     response.set_cookie(COOKIE_NAME, token, max_age=SESSION_AGE, httponly=True,
-                        secure=request.url.scheme == "https", samesite="lax", path="/")
+                        secure=public_scheme == "https", samesite="lax", path="/")
     return _public(user, csrf_token)
 
 
