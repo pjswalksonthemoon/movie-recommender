@@ -1,7 +1,7 @@
 /* Wachl's warm cinema palette, based on the supplied logo artwork. */
 :root {
   color-scheme: light;
-  --bg: #f8fbe9;
+  --bg: #fbffec;
   --panel: #f0f4dc;
   --line: #cbd5ad;
   --text: #263712;
@@ -29,7 +29,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .hero h1 { color: var(--olive); font-size: clamp(44px, 4.6vw, 65px); letter-spacing: -.06em; }
 .hero h1 em { color: var(--lime); }
 .hero p { color: #52643c; max-width: 650px; }
-.hero-logo { position: absolute; right: 0; top: 74px; width: min(285px, 24vw); height: auto; mix-blend-mode: multiply; }
+.hero-logo { position: absolute; right: 0; top: 74px; width: min(285px, 24vw); height: auto; }
 .eyebrow, .search-hint, .method { color: var(--olive); }
 .search-shell { background: #fffef5; border-color: #a9b98a; box-shadow: 0 12px 36px #536b2214; }
 .search-shell:focus-within { border-color: var(--olive); box-shadow: 0 0 0 3px #78a5002c; }
@@ -75,6 +75,7 @@ footer .brand { color: var(--olive); }
 }
 .detail-info { color: #fffef1; }
 .detail-info .detail-subtitle, .detail-info .detail-tagline { color: #e7eddb; }
+.detail-info .vote-count { color: #dce8ce; }
 .detail-info .detail-eyebrow, .detail-info .rating-badge { color: #d8f7a0; }
 .detail-info .genre-chip { background: #f8fbe926; border-color: #f8fbe966; color: #fff; }
 .detail-info .back-button { color: #fff; background: #24331edb; border-color: #f8fbe970; }
