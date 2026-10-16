@@ -1,6 +1,8 @@
-# Reelwise · movie recommendations
+# Wachl · good movies bring people together
 
-A runnable FastAPI media-discovery app with MovieLens collaborative filtering, live TMDB movie and TV listings, AniList anime, personal accounts and saved watchlists. The frontend is plain HTML/CSS/JavaScript with no build step. TMDB listings require a server-side key; AniList and the basic MovieLens catalogue do not.
+A runnable FastAPI media-discovery app with MovieLens collaborative filtering, live TMDB movie and TV listings, AniList anime, personal accounts and saved watchlists. The frontend is plain HTML/CSS/JavaScript with no build step. TMDB listings require a server-side key; AniList and the basic MovieLens catalogue do not. The Wachl name, olive-and-cream palette, and "Good movies bring people together" slogan come from the supplied logo artwork in `app/static/wachl-logo.png`.
+
+The live Python-hosted site is at [Wachl on Railway](https://reelwise-movie-recommender-production.up.railway.app/). The existing Railway domain retains its original service name; the website itself uses Wachl.
 
 ## GitHub Pages hosting
 

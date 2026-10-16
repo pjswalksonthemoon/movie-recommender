@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Wachl film reel">
+  <circle cx="25" cy="28" r="22" fill="#78a500"/>
+  <circle cx="25" cy="28" r="16" fill="none" stroke="#f8fbe9" stroke-width="1.7"/>
+  <g fill="#f8fbe9">
+    <path d="M24 11h2l2 11-3 2-3-2z"/>
+    <path d="m37 17 1 2-7 9-4-1v-3z"/>
+    <path d="m40 33-1 2-11-1-2-4 3-2z"/>
+    <path d="m29 44-2 1-5-10 2-4 4 2z"/>
+    <path d="m12 37-1-2 10-7 4 2v3z"/>
+    <path d="m13 20 2-2 9 7-1 4h-3z"/>
+  </g>
+  <circle cx="25" cy="28" r="3.6" fill="#78a500"/>
+  <path d="M39 39c11 0 7 11 16 11 3 0 5-2 6-4" fill="none" stroke="#78a500" stroke-width="7" stroke-linecap="round"/>
+  <path d="M41 42h4m0 4h4m2 3h4" stroke="#f8fbe9" stroke-width="2" stroke-linecap="round"/>
+</svg>

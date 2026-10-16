@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
         await app.state.media.close()
 
 
-app = FastAPI(title="Reelwise", lifespan=lifespan)
+app = FastAPI(title="Wachl", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 app.include_router(auth_router)
 app.include_router(media_router)

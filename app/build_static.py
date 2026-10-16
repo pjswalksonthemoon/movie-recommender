@@ -12,7 +12,7 @@ def export_site(engine: MovieRecommender, destination: Path) -> None:
     """Export the catalog and top 50 neighbors; no individual ratings are exported."""
     destination.mkdir(parents=True, exist_ok=True)
     source = Path(__file__).parent / "static"
-    for name in ("style.css", "script.js", "discovery.js", "static-api.js"):
+    for name in ("style.css", "branding.css", "wachl-logo.png", "wachl-mark.svg", "script.js", "discovery.js", "static-api.js"):
         shutil.copyfile(source / name, destination / name)
     html = (source / "index.html").read_text(encoding="utf-8")
     html = html.replace('/static/', './').replace('href="/"', 'href="./"')

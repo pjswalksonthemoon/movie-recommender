@@ -202,7 +202,7 @@ function renderError(error, movieId) {
 }
 function renderDetails(movie, movieId) {
   detailView.replaceChildren();
-  document.title = `${movie.title} — Reelwise`;
+  document.title = `${movie.title} — Wachl`;
   const wrapper = element('article', 'movie-detail page-enter');
   const hero = element('section', 'detail-hero');
   const backdrop = safeImage(movie.backdrop);
@@ -341,7 +341,7 @@ function makeFilmCredit(movie) {
   card.append(link); return card;
 }
 function renderPerson(person) {
-  personView.replaceChildren(); document.title = `${person.name} — Reelwise`;
+  personView.replaceChildren(); document.title = `${person.name} — Wachl`;
   const wrapper = element('article', 'person-page page-enter');
   const back = element('button', 'back-button', '← Back'); back.type = 'button';
   back.addEventListener('click', () => history.state?.reelwise ? history.back() : goHome());
@@ -404,7 +404,7 @@ function route() {
   else if (location.hash.match(/^#\/person\/(\d+)\/?$/)) showPerson(Number(location.hash.match(/^#\/person\/(\d+)\/?$/)[1]));
   else {
     pageController?.abort(); detailView.hidden = true; personView.hidden = true; homeView.hidden = false;
-    document.title = 'Reelwise — Your next great watch';
+    document.title = 'Wachl — Good movies bring people together';
     window.scrollTo({ top: 0, behavior: 'instant' });
     if (!homeLoaded) { homeLoaded = true; load(); }
   }

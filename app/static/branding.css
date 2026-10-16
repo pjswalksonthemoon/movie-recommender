@@ -1,0 +1,118 @@
+/* Wachl's warm cinema palette, based on the supplied logo artwork. */
+:root {
+  color-scheme: light;
+  --bg: #f8fbe9;
+  --panel: #f0f4dc;
+  --line: #cbd5ad;
+  --text: #263712;
+  --muted: #63744d;
+  --lime: #78a500;
+  --olive: #647d2b;
+  --red: #ed443c;
+}
+
+body { background: var(--bg); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 3px;
+}
+
+.header { min-height: 92px; height: auto; gap: 22px; }
+.brand { color: var(--olive); letter-spacing: -.06em; }
+.brand-mark { display: block; flex: none; width: 43px; height: 43px; }
+.brand-name { border-bottom: 3px dotted var(--red); line-height: 1.13; padding-bottom: 3px; }
+.header-note { color: var(--olive); font-size: 11px; letter-spacing: .14em; }
+#account-nav .text-button { color: var(--olive); }
+#account-nav .search-submit { background: var(--olive); color: #fff; }
+
+.hero { padding: 88px 300px 70px 0; min-height: 555px; }
+.hero h1 { color: var(--olive); font-size: clamp(44px, 4.6vw, 65px); letter-spacing: -.06em; }
+.hero h1 em { color: var(--lime); }
+.hero p { color: #52643c; max-width: 650px; }
+.hero-logo { position: absolute; right: 0; top: 74px; width: min(285px, 24vw); height: auto; mix-blend-mode: multiply; }
+.eyebrow, .search-hint, .method { color: var(--olive); }
+.search-shell { background: #fffef5; border-color: #a9b98a; box-shadow: 0 12px 36px #536b2214; }
+.search-shell:focus-within { border-color: var(--olive); box-shadow: 0 0 0 3px #78a5002c; }
+input { color: var(--text); }
+input::placeholder { color: #7e8c6c; }
+.search-submit, .trailer-button { background: var(--lime); color: #fff; }
+.search-submit:hover, .trailer-button:hover { background: #658e00; color: #fff; }
+#suggestions { background: #fffef5; border-color: var(--line); box-shadow: 0 16px 40px #26371225; }
+#suggestions li[aria-selected=true], #suggestions li:hover { background: #eef3d8; color: var(--olive); }
+
+.tab-button, .genre-filters .genre-chip, .list-choice, .season-card {
+  background: #f0f4dc; border-color: var(--line); color: var(--text);
+}
+.tab-button[aria-pressed=true], .genre-filters .genre-chip[aria-pressed=true] {
+  background: var(--olive); border-color: var(--olive); color: #fff;
+}
+.movie-card, .film-card, .cast-card, .watchlist-card {
+  background: #fffef5; border-color: var(--line); color: var(--text);
+}
+.movie-card:hover, .film-card:hover { border-color: var(--lime); box-shadow: 0 16px 32px #455d1b1f; }
+.card-art, .detail-grid .card-art, .art-poster { background: #e4e9d3; }
+.card-placeholder, .detail-poster-placeholder {
+  background: linear-gradient(145deg, #dfe9bd, #b4c984); color: var(--olive);
+}
+.card-summary, .card-people, .overview-copy { color: #52643f; }
+.card-rating { color: #3d5514; background: #e8f1ca; border-color: #a8be72; }
+.tag { background: #edf2db; color: #52683b; }
+.person-link, .text-button, .relation-card { color: #527500; }
+.person-link:hover, .text-button:hover { color: #334f00; }
+.match, .film-icon, .person-department { color: var(--olive); }
+.collection, .browse-section, .discovery-home, .explanation, footer { border-color: var(--line); }
+.explanation-icon { color: var(--lime); }
+.explanation p, .explanation h3 { color: var(--text); }
+footer .brand { color: var(--olive); }
+.tmdb-disclaimer { color: var(--muted); }
+.limited-notice, #status { background: #f0f4dc; border-color: var(--line); color: var(--text); }
+.card-art.skeleton, .skeleton { background: linear-gradient(100deg,#e3e9d0 25%,#f3f7df 40%,#e3e9d0 65%); background-size: 300% 100%; }
+
+.detail-hero { background: #344223; }
+.detail-hero:after {
+  background: linear-gradient(90deg,#203019f2 3%,#26371de8 38%,#283821b8 75%,#26371dc9),
+              linear-gradient(0deg,#25361d 0%,transparent 60%);
+}
+.detail-info { color: #fffef1; }
+.detail-info .detail-subtitle, .detail-info .detail-tagline { color: #e7eddb; }
+.detail-info .detail-eyebrow, .detail-info .rating-badge { color: #d8f7a0; }
+.detail-info .genre-chip { background: #f8fbe926; border-color: #f8fbe966; color: #fff; }
+.detail-info .back-button { color: #fff; background: #24331edb; border-color: #f8fbe970; }
+.detail-info .text-button { color: #d8f7a0; }
+.detail-body, .person-page { color: var(--text); }
+.detail-section, .fact, .person-header { border-color: var(--line); }
+.fact-label, .person-fact, .film-meta { color: var(--muted); }
+.cast-photo, .cast-placeholder, .person-photo { background: #e5ecd1; }
+.cast-placeholder, .person-photo-placeholder { color: var(--olive); }
+.back-button { background: #edf2d9; border-color: var(--line); color: var(--olive); }
+.back-button:hover { border-color: var(--olive); color: var(--olive); }
+.detail-error { background: #fffef5; border-color: var(--line); }
+#trailer-dialog, #auth-dialog, #bookmark-dialog {
+  background: #fffef5; color: var(--text); border-color: var(--line);
+}
+#auth-dialog input { background: #f8fbe9; border: 1px solid var(--line); color: var(--text); }
+.auth-label, .row-state, .subtle { color: var(--muted); }
+.list-filters select, .watchlist-controls select { background: #fffef5; border-color: var(--line); color: var(--text); }
+.bookmark-button { background: #edf4d6; color: #476700; border-color: #92ad5b; }
+.bookmark-button:hover { background: var(--olive); color: #fff; }
+#toast { background: #fffef5; color: var(--text); border-color: var(--olive); box-shadow: 0 12px 35px #26371230; }
+
+@media (max-width: 1100px) {
+  .hero { padding-right: 245px; }
+  .hero-logo { width: 230px; }
+}
+@media (max-width: 760px) {
+  .header { min-height: 76px; }
+  .brand-mark { width: 36px; height: 36px; }
+  .hero { padding: 45px 0 44px; min-height: 0; }
+  .hero h1 { font-size: clamp(38px, 8vw, 52px); }
+  .hero-logo { display: block; position: static; width: 190px; margin: 24px auto 0; }
+  .detail-hero:after { background: linear-gradient(90deg,#26371dee,#26371dd4),linear-gradient(0deg,#26371d 0%,transparent 65%); }
+}
+@media (max-width: 480px) {
+  .brand { font-size: 23px; }
+  .brand-mark { width: 31px; height: 31px; }
+  .hero h1 { font-size: 38px; }
+  .hero-logo { width: 160px; }
+  footer .brand { font-size: 21px; }
+}
